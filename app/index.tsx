@@ -1,8 +1,9 @@
 import { View, Text, StyleSheet, TouchableOpacity, ImageBackground, Animated, ScrollView } from 'react-native';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'expo-router';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
-const SCREENS = ['welcome', 'prayer', 'why', 'confirmation', 'reminder', 'frequency', 'bad habits', 'therapy'];
+const SCREENS = ['welcome', 'prayer', 'why', 'confirmation', 'reminder', 'bad habits', 'therapy', 'free trial offer', 'trial ending reminder'];
 
 const REASONS = [
   'Deepen my relationship with God',
@@ -68,38 +69,102 @@ export default function Onboarding() {
   const [selectedBadHabits, setSelectedBadHabits] = useState<string[]>([]);
   const [selectedFrequency, setSelectedFrequency] = useState<string>('');
   const [selectedTherapy, setSelectedTherapy] = useState<string>('');
+  const [reminderTime, setReminderTime] = useState(new Date());
   const router = useRouter();
 
   // Animation values
   const fadeAnim1 = useRef(new Animated.Value(0)).current;
   const fadeAnim2 = useRef(new Animated.Value(0)).current;
   const fadeAnim3 = useRef(new Animated.Value(0)).current;
+  const animationRef = useRef<Animated.CompositeAnimation | null>(null);
+  const hasAnimatedScreen = useRef<Set<number>>(new Set());
 
+  // Confirmation items animation values (max 7 items based on REASONS length)
+  const confirmationAnims = useRef(
+    Array.from({ length: 7 }, () => new Animated.Value(0))
+  ).current;
+
+  // Screens that should not have fade-in animations
+  const noAnimationScreens = [2, 5, 6];
+
+  // Animate confirmation items sequentially when on screen 3
   useEffect(() => {
-    // Reset animations when screen changes
+    if (currentScreen === 3 && !hasAnimatedScreen.current.has(3)) {
+      // Reset all confirmation animations
+      confirmationAnims.forEach(anim => anim.setValue(0));
+
+      // Start staggered animations for confirmation items after heading fades in
+      const itemCount = selectedReasons.length > 0 ? selectedReasons.length : 1;
+      const itemAnimations = confirmationAnims.slice(0, itemCount).map(anim =>
+        Animated.timing(anim, {
+          toValue: 1,
+          duration: 1200,
+          useNativeDriver: true,
+        })
+      );
+
+      // Delay confirmation items until after heading (fadeAnim1) finishes
+      setTimeout(() => {
+        Animated.stagger(1200, itemAnimations).start();
+      }, 2000); // Wait for heading to fade in first
+    }
+  }, [currentScreen, selectedReasons.length, confirmationAnims]);
+
+  // Run animation only once per screen
+  useEffect(() => {
+    // Skip animations for certain screens - show content immediately
+    if (noAnimationScreens.includes(currentScreen)) {
+      fadeAnim1.setValue(1);
+      fadeAnim2.setValue(1);
+      fadeAnim3.setValue(1);
+      return;
+    }
+
+    // If we've already animated this screen, don't animate again
+    if (hasAnimatedScreen.current.has(currentScreen)) {
+      return;
+    }
+
+    // Mark this screen as animated
+    hasAnimatedScreen.current.add(currentScreen);
+
+    // Stop any running animation
+    if (animationRef.current) {
+      animationRef.current.stop();
+    }
+
+    // Reset animation values
     fadeAnim1.setValue(0);
     fadeAnim2.setValue(0);
     fadeAnim3.setValue(0);
 
-    // Start sequential fade-in animations
-    Animated.sequence([
+    // Start sequential fade-in animations with stagger
+    animationRef.current = Animated.stagger(2000, [
       Animated.timing(fadeAnim1, {
         toValue: 1,
-        duration: 2000,
+        duration: 800,
         useNativeDriver: true,
       }),
       Animated.timing(fadeAnim2, {
         toValue: 1,
-        duration: 2000,
+        duration: 800,
         useNativeDriver: true,
       }),
       Animated.timing(fadeAnim3, {
         toValue: 1,
-        duration: 2000,
+        duration: 800,
         useNativeDriver: true,
       }),
-    ]).start();
-  }, [currentScreen]);
+    ]);
+
+    animationRef.current.start();
+
+    return () => {
+      if (animationRef.current) {
+        animationRef.current.stop();
+      }
+    };
+  }, [currentScreen, fadeAnim1, fadeAnim2, fadeAnim3]);
 
   const toggleReason = (reason: string) => {
     if (selectedReasons.includes(reason)) {
@@ -139,10 +204,10 @@ export default function Onboarding() {
       return (
         <View style={styles.welcomeContainer}>
           <Animated.Text style={[styles.welcomeTitle, { opacity: fadeAnim1 }]}>
-            Welcome to{'\n'}Exploring Faith Together.
+            Welcome to{'\n'}Exploring Faith Together
           </Animated.Text>
           <Animated.Text style={[styles.welcomeSubtitle, { opacity: fadeAnim2 }]}>
-            First, let's take a moment for a prayer.
+            First, let's take a moment for prayer
           </Animated.Text>
         </View>
       );
@@ -161,159 +226,185 @@ export default function Onboarding() {
     }
     if (currentScreen === 2) {
       return (
-        <ScrollView
-          style={styles.choiceScreenContainer}
-          contentContainerStyle={styles.choiceScrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          <Text style={styles.choiceHeading}>What brings you on this faith journey?</Text>
-          <View style={styles.choiceList}>
-            {REASONS.map((reason) => (
-              <TouchableOpacity
-                key={reason}
-                style={[
-                  styles.choiceItem,
-                  selectedReasons.includes(reason) && styles.choiceItemSelected,
-                ]}
-                onPress={() => toggleReason(reason)}
-              >
-                <Text
+        <View style={{ flex: 1, width: '100%' }}>
+          <ScrollView
+            style={styles.choiceScreenContainer}
+            contentContainerStyle={styles.choiceScrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <Animated.Text style={[styles.choiceHeading, { opacity: fadeAnim1 }]}>What brings you on this faith journey?</Animated.Text>
+            <Animated.View style={[styles.choiceList, { opacity: fadeAnim2 }]}>
+              {REASONS.map((reason) => (
+                <TouchableOpacity
+                  key={reason}
                   style={[
-                    styles.choiceText,
-                    selectedReasons.includes(reason) && styles.choiceTextSelected,
+                    styles.choiceItem,
+                    selectedReasons.includes(reason) && styles.choiceItemSelected,
                   ]}
+                  onPress={() => toggleReason(reason)}
                 >
-                  {reason}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </ScrollView>
+                  <Text
+                    style={[
+                      styles.choiceText,
+                      selectedReasons.includes(reason) && styles.choiceTextSelected,
+                    ]}
+                  >
+                    {reason}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </Animated.View>
+          </ScrollView>
+        </View>
       );
     }
     if (currentScreen === 3) {
       return (
-        <ScrollView
-          style={styles.choiceScreenContainer}
-          contentContainerStyle={styles.choiceScrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          <Text style={styles.choiceHeading}>Your Faith Journey</Text>
-          {selectedReasons.length > 0 ? (
-            <View style={styles.confirmationList}>
-              {selectedReasons.map((reason) => (
-                <View key={reason} style={styles.confirmationItem}>
-                  <Text style={styles.confirmationHabit}>{reason}</Text>
+        <View style={{ flex: 1, width: '100%' }}>
+          <ScrollView
+            style={styles.choiceScreenContainer}
+            contentContainerStyle={styles.choiceScrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <Animated.Text style={[styles.choiceHeading, { opacity: fadeAnim1 }]}>Let's Begin Your Journey</Animated.Text>
+            {selectedReasons.length > 0 ? (
+              <View style={styles.confirmationList}>
+                {selectedReasons.map((reason, index) => (
+                  <Animated.View key={reason} style={[styles.confirmationItem, { opacity: confirmationAnims[index] }]}>
+                    <View style={styles.confirmationRow}>
+                      <Text style={styles.checkmark}>✓</Text>
+                      <Text style={styles.confirmationMessage}>
+                        {REASON_CONFIRMATIONS[reason]}
+                      </Text>
+                    </View>
+                  </Animated.View>
+                ))}
+              </View>
+            ) : (
+              <Animated.View style={[styles.confirmationItem, { opacity: confirmationAnims[0] }]}>
+                <View style={styles.confirmationRow}>
+                  <Text style={styles.checkmark}>✓</Text>
                   <Text style={styles.confirmationMessage}>
-                    {REASON_CONFIRMATIONS[reason]}
+                    Begin your journey of spiritual growth through daily Scripture and prayer.
                   </Text>
                 </View>
-              ))}
-            </View>
-          ) : (
-            <View style={styles.confirmationItem}>
-              <Text style={styles.confirmationMessage}>
-                Begin your journey of spiritual growth through daily Scripture and prayer.
-              </Text>
-            </View>
-          )}
-        </ScrollView>
+              </Animated.View>
+            )}
+          </ScrollView>
+        </View>
+      );
+    }
+    if (currentScreen === 4) {
+      return (
+        <Animated.View style={[styles.reminderContainer, { opacity: fadeAnim1 }]}>
+          <Text style={styles.reminderHeading}>When do you find yourself needing a boost of strength?</Text>
+
+          <View style={styles.timePickerWrapper}>
+            <DateTimePicker
+              value={reminderTime}
+              mode="time"
+              display="spinner"
+              onChange={(event, selectedDate) => {
+                if (selectedDate) {
+                  setReminderTime(selectedDate);
+                }
+              }}
+              textColor="#000000"
+              style={styles.timePicker}
+            />
+          </View>
+        </Animated.View>
       );
     }
     if (currentScreen === 5) {
       return (
-        <ScrollView
-          style={styles.choiceScreenContainer}
-          contentContainerStyle={styles.choiceScrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          <Text style={styles.choiceHeading}>How often do you seek guidance from clergy or a mental health professional?</Text>
-          <View style={styles.choiceList}>
-            {FREQUENCY_OPTIONS.map((option) => (
-              <TouchableOpacity
-                key={option}
-                style={[
-                  styles.choiceItem,
-                  selectedFrequency === option && styles.choiceItemSelected,
-                ]}
-                onPress={() => selectFrequency(option)}
-              >
-                <Text
+        <View style={{ flex: 1, width: '100%' }}>
+          <ScrollView
+            style={styles.choiceScreenContainer}
+            contentContainerStyle={styles.choiceScrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <Text style={styles.choiceHeading}>Which bad habits would you like to get rid of?</Text>
+            <View style={styles.choiceList}>
+              {BAD_HABITS.map((habit) => (
+                <TouchableOpacity
+                  key={habit}
                   style={[
-                    styles.choiceText,
-                    selectedFrequency === option && styles.choiceTextSelected,
+                    styles.choiceItem,
+                    selectedBadHabits.includes(habit) && styles.choiceItemSelected,
                   ]}
+                  onPress={() => toggleBadHabit(habit)}
                 >
-                  {option}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </ScrollView>
+                  <Text
+                    style={[
+                      styles.choiceText,
+                      selectedBadHabits.includes(habit) && styles.choiceTextSelected,
+                    ]}
+                  >
+                    {habit}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </ScrollView>
+        </View>
       );
     }
     if (currentScreen === 6) {
       return (
-        <ScrollView
-          style={styles.choiceScreenContainer}
-          contentContainerStyle={styles.choiceScrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          <Text style={styles.choiceHeading}>Which bad habits would you like to replace?</Text>
-          <View style={styles.choiceList}>
-            {BAD_HABITS.map((habit) => (
-              <TouchableOpacity
-                key={habit}
-                style={[
-                  styles.choiceItem,
-                  selectedBadHabits.includes(habit) && styles.choiceItemSelected,
-                ]}
-                onPress={() => toggleBadHabit(habit)}
-              >
-                <Text
+        <View style={{ flex: 1, width: '100%' }}>
+          <ScrollView
+            style={styles.choiceScreenContainer}
+            contentContainerStyle={styles.choiceScrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <Text style={styles.choiceHeading}>How often do you talk with someone about your faith and well being?</Text>
+            <View style={styles.choiceList}>
+              {THERAPY_OPTIONS.map((option) => (
+                <TouchableOpacity
+                  key={option}
                   style={[
-                    styles.choiceText,
-                    selectedBadHabits.includes(habit) && styles.choiceTextSelected,
+                    styles.choiceItem,
+                    selectedTherapy === option && styles.choiceItemSelected,
                   ]}
+                  onPress={() => selectTherapy(option)}
                 >
-                  {habit}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </ScrollView>
+                  <Text
+                    style={[
+                      styles.choiceText,
+                      selectedTherapy === option && styles.choiceTextSelected,
+                    ]}
+                  >
+                    {option}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </ScrollView>
+        </View>
       );
     }
     if (currentScreen === 7) {
       return (
-        <ScrollView
-          style={styles.choiceScreenContainer}
-          contentContainerStyle={styles.choiceScrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          <Text style={styles.choiceHeading}>How often do you seek guidance from clergy or a mental health professional?</Text>
-          <View style={styles.choiceList}>
-            {THERAPY_OPTIONS.map((option) => (
-              <TouchableOpacity
-                key={option}
-                style={[
-                  styles.choiceItem,
-                  selectedTherapy === option && styles.choiceItemSelected,
-                ]}
-                onPress={() => selectTherapy(option)}
-              >
-                <Text
-                  style={[
-                    styles.choiceText,
-                    selectedTherapy === option && styles.choiceTextSelected,
-                  ]}
-                >
-                  {option}
-                </Text>
-              </TouchableOpacity>
-            ))}
+        <Animated.View style={[styles.trialContainer, { opacity: fadeAnim1 }]}>
+          <View style={styles.trialTitleContainer}>
+            <Text style={styles.trialTitle}>We want you to try</Text>
+            <Text style={styles.trialTitleHighlight}>Bible for Beginners</Text>
+            <Text style={styles.trialTitle}>for free</Text>
           </View>
-        </ScrollView>
+        </Animated.View>
+      );
+    }
+    if (currentScreen === 8) {
+      return (
+        <Animated.View style={[styles.reminderContainer, { opacity: fadeAnim1 }]}>
+          <View style={styles.dueDateReminderTextContainer}>
+            <Text style={styles.dueDateReminderText}>You'll get a reminder</Text>
+            <Text style={styles.dueDateReminderHighlight}>2 days</Text>
+            <Text style={styles.dueDateReminderText}>before your trial ends.</Text>
+          </View>
+          <Text style={styles.bellIcon}>🔔</Text>
+        </Animated.View>
       );
     }
     return <Text style={styles.screenName}>{SCREENS[currentScreen]}</Text>;
@@ -329,23 +420,13 @@ export default function Onboarding() {
       <View style={styles.content}>
         {renderContent()}
 
-        {currentScreen <= 1 ? (
-          <Animated.View style={{ opacity: fadeAnim3, width: '100%', alignItems: 'center', paddingHorizontal: 24 }}>
-            <TouchableOpacity style={styles.button} onPress={handleContinue}>
-              <Text style={styles.buttonText}>
-                {currentScreen === 1 ? 'AMEN' : "LET'S PRAY"}
-              </Text>
-            </TouchableOpacity>
-          </Animated.View>
-        ) : (
-          <View style={{ width: '100%', alignItems: 'center', paddingHorizontal: 24 }}>
-            <TouchableOpacity style={styles.button} onPress={handleContinue}>
-              <Text style={styles.buttonText}>
-                CONTINUE
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
+        <Animated.View style={{ opacity: fadeAnim3, width: '100%', alignItems: 'center', paddingHorizontal: 24 }}>
+          <TouchableOpacity style={styles.button} onPress={handleContinue}>
+            <Text style={styles.buttonText}>
+              {currentScreen === 0 ? "LET'S PRAY" : currentScreen === 1 ? 'AMEN' : currentScreen === 4 ? 'SCHEDULE A NOTIFICATION' : currentScreen === 8 ? 'TRY FOR $0.00' : 'CONTINUE'}
+            </Text>
+          </TouchableOpacity>
+        </Animated.View>
       </View>
     </ImageBackground>
   );
@@ -400,16 +481,18 @@ const styles = StyleSheet.create({
   choiceScrollContent: {
     paddingHorizontal: 24,
     paddingBottom: 20,
+    alignItems: 'center',
   },
   choiceHeading: {
     fontSize: 20,
     fontWeight: '500',
     color: '#1A1A1A',
-    textAlign: 'left',
+    textAlign: 'center',
     marginBottom: 24,
     marginTop: 40,
     letterSpacing: 0.3,
     lineHeight: 28,
+    width: '100%',
   },
   choiceList: {
     width: '100%',
@@ -429,6 +512,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 3,
     elevation: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   choiceItemSelected: {
     backgroundColor: '#E8F4FD',
@@ -437,7 +522,7 @@ const styles = StyleSheet.create({
   },
   choiceText: {
     fontSize: 17,
-    textAlign: 'left',
+    textAlign: 'center',
     color: '#5A5A5A',
     fontWeight: '400',
     letterSpacing: 0.2,
@@ -451,18 +536,20 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   confirmationItem: {
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    padding: 20,
-    borderRadius: 12,
+    backgroundColor: 'transparent',
+    padding: 0,
     marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 3,
+  },
+  confirmationRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  checkmark: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#000000',
+    marginRight: 12,
+    marginTop: 2,
   },
   confirmationHabit: {
     fontSize: 18,
@@ -474,9 +561,35 @@ const styles = StyleSheet.create({
   confirmationMessage: {
     fontSize: 16,
     fontWeight: '400',
-    color: '#5A5A5A',
+    color: '#000000',
     lineHeight: 24,
     letterSpacing: 0.2,
+    flex: 1,
+  },
+  // Reminder screen styles
+  reminderContainer: {
+    width: '100%',
+    paddingHorizontal: 24,
+    paddingTop: 40,
+    flex: 1,
+  },
+  reminderHeading: {
+    fontSize: 20,
+    fontWeight: '500',
+    color: '#1A1A1A',
+    textAlign: 'center',
+    marginBottom: 40,
+    letterSpacing: 0.3,
+    lineHeight: 28,
+  },
+  timePickerWrapper: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timePicker: {
+    width: '100%',
+    height: 200,
   },
   // Legacy styles for other screens
   screenName: {
@@ -502,5 +615,133 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '400',
     letterSpacing: 4,
+  },
+  // Free trial offer screen styles
+  trialContainer: {
+    width: '100%',
+    paddingHorizontal: 24,
+    paddingTop: 160,
+    flex: 1,
+  },
+  trialTitleContainer: {
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  trialTitle: {
+    fontSize: 28,
+    fontWeight: '400',
+    color: '#5A5A5A',
+    textAlign: 'center',
+    letterSpacing: 0.5,
+  },
+  trialTitleHighlight: {
+    fontSize: 28,
+    fontWeight: '600',
+    color: '#000000',
+    textAlign: 'center',
+    letterSpacing: 0.5,
+  },
+  trialSubtitle: {
+    fontSize: 16,
+    fontWeight: '400',
+    color: '#5A5A5A',
+    textAlign: 'center',
+    marginBottom: 32,
+    lineHeight: 24,
+    letterSpacing: 0.2,
+  },
+  trialFeatures: {
+    width: '100%',
+    marginBottom: 32,
+  },
+  trialFeatureItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingHorizontal: 8,
+  },
+  trialFeatureText: {
+    fontSize: 16,
+    fontWeight: '400',
+    color: '#1A1A1A',
+    marginLeft: 4,
+    letterSpacing: 0.2,
+  },
+  trialNote: {
+    fontSize: 13,
+    fontWeight: '400',
+    color: '#888888',
+    textAlign: 'center',
+    lineHeight: 20,
+    letterSpacing: 0.2,
+  },
+  // Trial ending reminder screen styles
+  reminderTitle: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: '#1A1A1A',
+    textAlign: 'left',
+    marginBottom: 12,
+    letterSpacing: 0.3,
+  },
+  reminderSubtitle: {
+    fontSize: 16,
+    fontWeight: '400',
+    color: '#5A5A5A',
+    textAlign: 'left',
+    marginBottom: 32,
+    lineHeight: 24,
+    letterSpacing: 0.2,
+  },
+  dueDateReminderTextContainer: {
+    marginTop: 80,
+    marginBottom: 32,
+    alignItems: 'center',
+  },
+  dueDateReminderText: {
+    fontSize: 24,
+    fontWeight: '400',
+    color: '#5A5A5A',
+    textAlign: 'center',
+    letterSpacing: 0.3,
+    lineHeight: 28,
+  },
+  dueDateReminderHighlight: {
+    fontSize: 22,
+    fontWeight: '600',
+    color: '#000000',
+    textAlign: 'center',
+    letterSpacing: 0.3,
+    lineHeight: 28,
+  },
+  bellIcon: {
+    fontSize: 80,
+    textAlign: 'center',
+    marginTop: 0,
+  },
+  reminderOptions: {
+    width: '100%',
+  },
+  reminderOption: {
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
+    paddingVertical: 20,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  reminderOptionText: {
+    fontSize: 17,
+    textAlign: 'left',
+    color: '#5A5A5A',
+    fontWeight: '400',
+    letterSpacing: 0.2,
   },
 });
