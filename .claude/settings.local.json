@@ -6,7 +6,11 @@
       "Bash(npx expo install --help:*)",
       "Bash(node --version:*)",
       "Bash(node scripts/generate-icons.js:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(npx expo start:*)",
+      "Bash(npm search:*)",
+      "Bash(npx expo install:*)",
+      "Bash(npm uninstall:*)"
     ],
     "deny": [],
     "ask": []

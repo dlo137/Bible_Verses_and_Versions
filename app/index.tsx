@@ -84,8 +84,49 @@ export default function Onboarding() {
     Array.from({ length: 7 }, () => new Animated.Value(0))
   ).current;
 
+  // Prayer screen animation values (3 lines)
+  const prayerAnim1 = useRef(new Animated.Value(0)).current;
+  const prayerAnim2 = useRef(new Animated.Value(0)).current;
+  const prayerAnim3 = useRef(new Animated.Value(0)).current;
+
   // Screens that should not have fade-in animations
   const noAnimationScreens = [2, 5, 6];
+
+  // Track if prayer animation has run
+  const hasPrayerAnimated = useRef(false);
+
+  // Animate prayer screen lines sequentially when on screen 1
+  useEffect(() => {
+    if (currentScreen === 1 && !hasPrayerAnimated.current) {
+      hasPrayerAnimated.current = true;
+
+      // Reset prayer animations
+      prayerAnim1.setValue(0);
+      prayerAnim2.setValue(0);
+      prayerAnim3.setValue(0);
+
+      // Start staggered animations for prayer lines after title fades in
+      setTimeout(() => {
+        Animated.stagger(2000, [
+          Animated.timing(prayerAnim1, {
+            toValue: 1,
+            duration: 1200,
+            useNativeDriver: false,
+          }),
+          Animated.timing(prayerAnim2, {
+            toValue: 1,
+            duration: 1200,
+            useNativeDriver: false,
+          }),
+          Animated.timing(prayerAnim3, {
+            toValue: 1,
+            duration: 1200,
+            useNativeDriver: false,
+          }),
+        ]).start();
+      }, 2800); // Wait for title to fade in first
+    }
+  }, [currentScreen, prayerAnim1, prayerAnim2, prayerAnim3]);
 
   // Animate confirmation items sequentially when on screen 3
   useEffect(() => {
@@ -142,17 +183,17 @@ export default function Onboarding() {
     animationRef.current = Animated.stagger(2000, [
       Animated.timing(fadeAnim1, {
         toValue: 1,
-        duration: 800,
+        duration: 1200,
         useNativeDriver: true,
       }),
       Animated.timing(fadeAnim2, {
         toValue: 1,
-        duration: 800,
+        duration: 1200,
         useNativeDriver: true,
       }),
       Animated.timing(fadeAnim3, {
         toValue: 1,
-        duration: 800,
+        duration: 1200,
         useNativeDriver: true,
       }),
     ]);
@@ -203,6 +244,12 @@ export default function Onboarding() {
     if (currentScreen === 0) {
       return (
         <View style={styles.welcomeContainer}>
+          <TouchableOpacity
+            style={styles.skipButton}
+            onPress={() => router.push('/(tabs)/verses')}
+          >
+            <Text style={styles.skipButtonText}>Skip</Text>
+          </TouchableOpacity>
           <Animated.Text style={[styles.welcomeTitle, { opacity: fadeAnim1 }]}>
             Welcome to{'\n'}Exploring Faith Together
           </Animated.Text>
@@ -218,9 +265,19 @@ export default function Onboarding() {
           <Animated.Text style={[styles.welcomeTitle, { opacity: fadeAnim1 }]}>
             Dear God,
           </Animated.Text>
-          <Animated.Text style={[styles.welcomeSubtitle, { opacity: fadeAnim2 }]}>
-            Thank you for meeting me right where I am. Teach me, guide me, and help me understand your word. Help me learn with an open heart and patience.
-          </Animated.Text>
+          <View style={styles.prayerContainer}>
+            <Text style={styles.prayerText}>
+              <Animated.Text style={{ opacity: prayerAnim1 }}>
+                Thank you for meeting me right where I am.{' '}
+              </Animated.Text>
+              <Animated.Text style={{ opacity: prayerAnim2 }}>
+                Teach me, guide me, and help me understand your word.{' '}
+              </Animated.Text>
+              <Animated.Text style={{ opacity: prayerAnim3 }}>
+                Help me learn with an open heart and patience.
+              </Animated.Text>
+            </Text>
+          </View>
         </View>
       );
     }
@@ -266,7 +323,7 @@ export default function Onboarding() {
             contentContainerStyle={styles.choiceScrollContent}
             showsVerticalScrollIndicator={false}
           >
-            <Animated.Text style={[styles.choiceHeading, { opacity: fadeAnim1 }]}>Let's Begin Your Journey</Animated.Text>
+            <Animated.Text style={[styles.choiceHeading, { opacity: fadeAnim1 }]}>We'll help you...</Animated.Text>
             {selectedReasons.length > 0 ? (
               <View style={styles.confirmationList}>
                 {selectedReasons.map((reason, index) => (
@@ -452,6 +509,17 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     width: '100%',
   },
+  skipButton: {
+    position: 'absolute',
+    top: 0,
+    left: 25,
+    padding: 8,
+  },
+  skipButtonText: {
+    fontSize: 16,
+    color: '#5A5A5A',
+    fontWeight: '400',
+  },
   welcomeTitle: {
     fontSize: 26,
     fontWeight: '300',
@@ -473,6 +541,19 @@ const styles = StyleSheet.create({
     marginTop: 12,
     marginLeft: 25,
     marginRight: 25,
+  },
+  prayerContainer: {
+    marginLeft: 25,
+    marginRight: 25,
+    marginTop: 12,
+  },
+  prayerText: {
+    fontSize: 18,
+    fontWeight: '300',
+    color: '#6B6B6B',
+    textAlign: 'left',
+    letterSpacing: 0.5,
+    lineHeight: 28,
   },
   // Choice screen styles
   choiceScreenContainer: {
