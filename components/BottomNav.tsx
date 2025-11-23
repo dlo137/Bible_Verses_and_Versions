@@ -3,15 +3,35 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, usePathname } from 'expo-router';
 import { useRef, useEffect } from 'react';
 import { useNav } from '../context/NavContext';
+import { useFavorites } from '../context/FavoritesContext';
 
 export default function BottomNav() {
   const router = useRouter();
   const pathname = usePathname();
-  const { isNavVisible, toggleNav } = useNav();
+  const { isNavVisible, toggleNav, isButtonVisible, currentVerse } = useNav();
+  const { toggleFavorite, isFavorite } = useFavorites();
 
-  const slideAnim = useRef(new Animated.Value(0)).current;
-  const buttonAnim = useRef(new Animated.Value(1)).current;
+  const slideAnim = useRef(new Animated.Value(100)).current;
+  const buttonAnim = useRef(new Animated.Value(0)).current;
+  const buttonFadeAnim = useRef(new Animated.Value(0)).current;
 
+  // Handle button visibility (fade in/out)
+  useEffect(() => {
+    if (isButtonVisible) {
+      Animated.timing(buttonFadeAnim, {
+        toValue: 1,
+        duration: 1000,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      // Reset immediately when hidden
+      buttonFadeAnim.setValue(0);
+      slideAnim.setValue(100);
+      buttonAnim.setValue(0);
+    }
+  }, [isButtonVisible]);
+
+  // Handle nav slide animation
   useEffect(() => {
     Animated.parallel([
       Animated.timing(slideAnim, {
@@ -60,24 +80,65 @@ export default function BottomNav() {
         })}
       </Animated.View>
 
-      {/* Toggle Button */}
-      <Animated.View
-        style={[
-          styles.toggleButtonContainer,
-          {
-            transform: [{
-              translateY: buttonAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0, -60]
-              })
-            }]
-          }
-        ]}
-      >
-        <TouchableOpacity style={styles.toggleButton} onPress={toggleNav}>
-          <Ionicons name={isNavVisible ? "close" : "add"} size={32} color="#1A1A1A" />
-        </TouchableOpacity>
-      </Animated.View>
+      {/* Toggle Button with Save and Share - Only on verses screen */}
+      {isButtonVisible && pathname === '/verses' && (
+        <Animated.View
+          style={[
+            styles.toggleButtonContainer,
+            {
+              opacity: buttonFadeAnim,
+              transform: [{
+                translateY: buttonAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, -60]
+                })
+              }]
+            }
+          ]}
+        >
+          {/* Save Button - Left (only on verses screen) */}
+          {isNavVisible && pathname === '/verses' && (
+            <Animated.View
+              style={[
+                styles.sideButton,
+                styles.saveButton,
+                { opacity: buttonAnim }
+              ]}
+            >
+              <TouchableOpacity
+                style={styles.sideButtonTouchable}
+                onPress={() => currentVerse && toggleFavorite(currentVerse)}
+              >
+                <Ionicons
+                  name={currentVerse && isFavorite(currentVerse.id) ? "heart" : "heart-outline"}
+                  size={24}
+                  color={currentVerse && isFavorite(currentVerse.id) ? "#E74C3C" : "#1A1A1A"}
+                />
+              </TouchableOpacity>
+            </Animated.View>
+          )}
+
+          {/* Main Toggle Button */}
+          <TouchableOpacity style={styles.toggleButton} onPress={toggleNav}>
+            <Ionicons name={isNavVisible ? "close" : "add"} size={32} color="#1A1A1A" />
+          </TouchableOpacity>
+
+          {/* Share Button - Right (only on verses screen) */}
+          {isNavVisible && pathname === '/verses' && (
+            <Animated.View
+              style={[
+                styles.sideButton,
+                styles.shareButton,
+                { opacity: buttonAnim }
+              ]}
+            >
+              <TouchableOpacity style={styles.sideButtonTouchable}>
+                <Ionicons name="share-outline" size={24} color="#1A1A1A" />
+              </TouchableOpacity>
+            </Animated.View>
+          )}
+        </Animated.View>
+      )}
     </>
   );
 }
@@ -111,6 +172,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     alignSelf: 'center',
     bottom: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   toggleButton: {
     width: 60,
@@ -124,5 +187,27 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+  },
+  sideButton: {
+    position: 'absolute',
+  },
+  sideButtonTouchable: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  saveButton: {
+    right: 80,
+  },
+  shareButton: {
+    left: 80,
   },
 });

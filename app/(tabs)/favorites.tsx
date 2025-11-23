@@ -1,23 +1,60 @@
-import { View, Text, StyleSheet, Image, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import BottomNav from '../../components/BottomNav';
-import { useNav } from '../../context/NavContext';
-
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+import { useFavorites } from '../../context/FavoritesContext';
 
 export default function Favorites() {
-  const { currentBgImage } = useNav();
+  const { favorites, removeFavorite } = useFavorites();
 
   return (
     <View style={styles.container}>
-      <Image
-        source={{ uri: currentBgImage }}
-        style={styles.backgroundImage}
-        resizeMode="cover"
-      />
-      <View style={styles.overlay} />
-      <View style={styles.content}>
-        <Text style={styles.text}>Favorites</Text>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Favorites</Text>
+        <Text style={styles.headerSubtitle}>{favorites.length} saved verses</Text>
       </View>
+
+      {/* Content */}
+      {favorites.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Ionicons name="heart-outline" size={64} color="rgba(255, 255, 255, 0.3)" />
+          <Text style={styles.emptyText}>No saved verses yet</Text>
+          <Text style={styles.emptySubtext}>
+            Tap the heart icon on verses to save them here
+          </Text>
+        </View>
+      ) : (
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {favorites.map((verse) => (
+            <View key={verse.id} style={styles.card}>
+              {/* Heart Icon */}
+              <TouchableOpacity
+                style={styles.heartButton}
+                onPress={() => removeFavorite(verse.id)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="heart" size={20} color="#E74C3C" />
+              </TouchableOpacity>
+
+              {/* Verse Text */}
+              <Text style={styles.verseText} numberOfLines={4}>
+                "{verse.text}"
+              </Text>
+
+              {/* Reference */}
+              <Text style={styles.verseReference}>
+                {verse.book_name} {verse.chapter}:{verse.verse}
+              </Text>
+            </View>
+          ))}
+          <View style={styles.bottomSpacer} />
+        </ScrollView>
+      )}
+
       <BottomNav />
     </View>
   );
@@ -26,26 +63,76 @@ export default function Favorites() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: 'transparent',
   },
-  backgroundImage: {
-    position: 'absolute',
-    width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT,
+  header: {
+    paddingTop: 60,
+    paddingBottom: 20,
+    paddingHorizontal: 24,
   },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: 'rgba(255, 255, 255, 1)',
+    marginBottom: 4,
   },
-  content: {
+  headerSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
+  emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingBottom: 80,
+    paddingBottom: 100,
   },
-  text: {
-    fontSize: 24,
-    fontWeight: '300',
-    color: '#1A1A1A',
+  emptyText: {
+    fontSize: 18,
+    fontWeight: '500',
+    color: 'rgba(255, 255, 255, 0.7)',
+    marginTop: 16,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.5)',
+    marginTop: 8,
+    textAlign: 'center',
+    paddingHorizontal: 40,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+  },
+  card: {
+    backgroundColor: 'rgba(50, 50, 50, 0.7)',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+  },
+  heartButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    padding: 4,
+  },
+  verseText: {
+    fontSize: 16,
+    fontWeight: '400',
+    color: '#FFFFFF',
+    lineHeight: 24,
+    marginBottom: 12,
+    paddingRight: 30,
+  },
+  verseReference: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#C9A227',
+    letterSpacing: 0.5,
+  },
+  bottomSpacer: {
+    height: 120,
   },
 });

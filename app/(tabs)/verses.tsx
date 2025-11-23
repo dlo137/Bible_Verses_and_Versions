@@ -1,13 +1,11 @@
-import { View, Text, StyleSheet, Animated, PanResponder, Dimensions, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Animated, PanResponder, ActivityIndicator } from 'react-native';
 import { useState, useRef, useEffect } from 'react';
 import { getRandomVerse, BibleVerse } from '../../lib/supabase';
 import BottomNav from '../../components/BottomNav';
 import { useNav } from '../../context/NavContext';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-
 export default function Verses() {
-  const { currentBgImage, setCurrentBgIndex, backgroundImages } = useNav();
+  const { setCurrentBgIndex, backgroundImages, setIsButtonVisible, setIsNavVisible, animateBgChange, setCurrentVerse: setNavCurrentVerse } = useNav();
   const [currentVerse, setCurrentVerse] = useState<BibleVerse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const recentBgIndices = useRef<number[]>([]);
@@ -16,7 +14,6 @@ export default function Verses() {
   // Fade-in animations
   const verseFadeAnim = useRef(new Animated.Value(0)).current;
   const referenceFadeAnim = useRef(new Animated.Value(0)).current;
-  const bgFadeAnim = useRef(new Animated.Value(1)).current;
 
   // Fetch initial verse on mount
   useEffect(() => {
@@ -27,6 +24,7 @@ export default function Verses() {
     const verse = await getRandomVerse();
     if (verse) {
       setCurrentVerse(verse);
+      setNavCurrentVerse(verse);
     }
     setIsLoading(false);
   };
@@ -45,73 +43,63 @@ export default function Verses() {
           duration: 2000,
           useNativeDriver: true,
         }),
-      ]).start();
+      ]).start(() => {
+        // Show the + button after verse and reference have faded in
+        setIsButtonVisible(true);
+      });
     }, 800);
   }, []);
 
-  const runFadeInAnimation = (delay: number = 0) => {
-    // Reset all animations
+  const handleSwipe = async (direction: 'left' | 'right') => {
+    // Immediately hide everything
     verseFadeAnim.setValue(0);
     referenceFadeAnim.setValue(0);
+    setIsButtonVisible(false);
+    setIsNavVisible(false);
 
-    // Run sequential fade-in: verse -> reference
-    setTimeout(() => {
-      Animated.sequence([
-        Animated.timing(verseFadeAnim, {
-          toValue: 1,
-          duration: 2000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(referenceFadeAnim, {
-          toValue: 1,
-          duration: 2000,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }, delay);
-  };
+    // Change background index randomly, avoiding recent images
+    const getNewBgIndex = () => {
+      const availableIndices = Array.from({ length: backgroundImages.length }, (_, i) => i)
+        .filter(i => !recentBgIndices.current.includes(i));
 
-  const handleSwipe = async (direction: 'left' | 'right') => {
-    // Fade out background
-    Animated.timing(bgFadeAnim, {
-      toValue: 0,
-      duration: 500,
-      useNativeDriver: true,
-    }).start(async () => {
-      // Change background index randomly, avoiding recent images
-      const getNewBgIndex = () => {
-        const availableIndices = Array.from({ length: backgroundImages.length }, (_, i) => i)
-          .filter(i => !recentBgIndices.current.includes(i));
-
-        // If all images are in recent history, pick any random one except current
-        if (availableIndices.length === 0) {
-          let newIndex;
-          do {
-            newIndex = Math.floor(Math.random() * backgroundImages.length);
-          } while (newIndex === currentBgIndexRef.current && backgroundImages.length > 1);
-          return newIndex;
-        }
-
-        return availableIndices[Math.floor(Math.random() * availableIndices.length)];
-      };
-
-      const newIndex = getNewBgIndex();
-      recentBgIndices.current.push(newIndex);
-      if (recentBgIndices.current.length > 10) {
-        recentBgIndices.current.shift();
+      // If all images are in recent history, pick any random one except current
+      if (availableIndices.length === 0) {
+        let newIndex;
+        do {
+          newIndex = Math.floor(Math.random() * backgroundImages.length);
+        } while (newIndex === currentBgIndexRef.current && backgroundImages.length > 1);
+        return newIndex;
       }
-      currentBgIndexRef.current = newIndex;
-      setCurrentBgIndex(newIndex);
-      // Fetch new verse
-      await fetchNewVerse();
-      // Fade in new background
-      Animated.timing(bgFadeAnim, {
+
+      return availableIndices[Math.floor(Math.random() * availableIndices.length)];
+    };
+
+    const newIndex = getNewBgIndex();
+    recentBgIndices.current.push(newIndex);
+    if (recentBgIndices.current.length > 10) {
+      recentBgIndices.current.shift();
+    }
+    currentBgIndexRef.current = newIndex;
+
+    // Animate background change and fetch new verse
+    await animateBgChange(newIndex);
+    await fetchNewVerse();
+
+    // Now run the fade-in animation for the new content
+    Animated.sequence([
+      Animated.timing(verseFadeAnim, {
         toValue: 1,
-        duration: 800,
+        duration: 2000,
         useNativeDriver: true,
-      }).start();
+      }),
+      Animated.timing(referenceFadeAnim, {
+        toValue: 1,
+        duration: 2000,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setIsButtonVisible(true);
     });
-    runFadeInAnimation(3000);
   };
 
   const panResponder = useRef(
@@ -132,14 +120,8 @@ export default function Verses() {
   ).current;
 
   return (
-    <View style={styles.container}>
-      <Animated.Image
-        source={{ uri: currentBgImage }}
-        style={[styles.backgroundImage, { opacity: bgFadeAnim }]}
-        resizeMode="cover"
-      />
-      <View style={styles.overlay} />
-      <View style={styles.content} {...panResponder.panHandlers}>
+    <View style={styles.container} {...panResponder.panHandlers}>
+      <View style={styles.content}>
         {/* Verse Display */}
         <View style={styles.verseContainer}>
           {isLoading ? (
@@ -174,16 +156,7 @@ export default function Verses() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
-  },
-  backgroundImage: {
-    position: 'absolute',
-    width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT,
-  },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'transparent',
   },
   content: {
     flex: 1,
