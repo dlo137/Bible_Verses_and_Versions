@@ -2,6 +2,9 @@ import { View, Text, StyleSheet, TouchableOpacity, ImageBackground, Animated, Sc
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { useAudioPlayer } from 'expo-audio';
+import { supabase } from '../lib/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const SCREENS = ['welcome', 'prayer', 'why', 'confirmation', 'reminder', 'bad habits', 'therapy', 'free trial offer', 'trial ending reminder'];
 
@@ -72,6 +75,12 @@ export default function Onboarding() {
   const [reminderTime, setReminderTime] = useState(new Date());
   const router = useRouter();
 
+  // Cathedral music state
+  const [cathedralSongs, setCathedralSongs] = useState<{ name: string; url: string }[]>([]);
+  const [currentCathedralIndex, setCurrentCathedralIndex] = useState(0);
+  const [cathedralUrl, setCathedralUrl] = useState('');
+  const cathedralPlayer = useAudioPlayer(cathedralUrl);
+
   // Animation values
   const fadeAnim1 = useRef(new Animated.Value(0)).current;
   const fadeAnim2 = useRef(new Animated.Value(0)).current;
@@ -94,6 +103,85 @@ export default function Onboarding() {
 
   // Track if prayer animation has run
   const hasPrayerAnimated = useRef(false);
+
+  // Load cathedral songs on mount
+  useEffect(() => {
+    loadCathedralSongs();
+  }, []);
+
+  const loadCathedralSongs = async () => {
+    try {
+      const { data, error } = await supabase.storage.from('bible_songs').list('', {
+        limit: 100,
+        offset: 0,
+      });
+
+      if (error) {
+        console.error('Error fetching cathedral songs:', error);
+        return;
+      }
+
+      // Filter for cathedral songs and sort them numerically
+      const songs = data
+        .filter(file => file.name.toLowerCase().startsWith('cathedral') &&
+                        (file.name.endsWith('.mp3') || file.name.endsWith('.m4a') || file.name.endsWith('.wav')))
+        .sort((a, b) => {
+          const numA = parseInt(a.name.match(/\d+/)?.[0] || '0');
+          const numB = parseInt(b.name.match(/\d+/)?.[0] || '0');
+          return numA - numB;
+        })
+        .map(file => ({
+          name: file.name.replace(/\.(mp3|m4a|wav)$/, ''),
+          url: `${supabase.storage.from('bible_songs').getPublicUrl(file.name).data.publicUrl}`,
+        }));
+
+      console.log('Loaded cathedral songs:', songs);
+      setCathedralSongs(songs);
+
+      // Auto-play cathedral 1.mp3 (first song)
+      if (songs.length > 0) {
+        setCathedralUrl(songs[0].url);
+        setCurrentCathedralIndex(0);
+      }
+    } catch (error) {
+      console.error('Error loading cathedral songs:', error);
+    }
+  };
+
+  // Auto-play when cathedral URL is set
+  useEffect(() => {
+    if (cathedralUrl && cathedralPlayer) {
+      setTimeout(() => {
+        cathedralPlayer.play();
+      }, 100);
+    }
+  }, [cathedralUrl, cathedralPlayer]);
+
+  // Listen for song end and play next song
+  useEffect(() => {
+    if (!cathedralPlayer) return;
+
+    const checkPlaybackStatus = setInterval(() => {
+      if (cathedralPlayer.playing === false && cathedralPlayer.duration > 0 &&
+          Math.abs(cathedralPlayer.currentTime - cathedralPlayer.duration) < 1) {
+        // Song has ended, play next song
+        playNextCathedralSong();
+      }
+    }, 1000);
+
+    return () => clearInterval(checkPlaybackStatus);
+  }, [cathedralPlayer, currentCathedralIndex, cathedralSongs]);
+
+  const playNextCathedralSong = () => {
+    if (cathedralSongs.length === 0) return;
+
+    const nextIndex = currentCathedralIndex < cathedralSongs.length - 1
+      ? currentCathedralIndex + 1
+      : 0; // Loop back to first song
+
+    setCurrentCathedralIndex(nextIndex);
+    setCathedralUrl(cathedralSongs[nextIndex].url);
+  };
 
   // Animate prayer screen lines sequentially when on screen 1
   useEffect(() => {
@@ -231,11 +319,28 @@ export default function Onboarding() {
     setSelectedTherapy(therapy);
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (currentScreen < SCREENS.length - 1) {
       setCurrentScreen(currentScreen + 1);
     } else {
-      // Onboarding complete - navigate to plans
+      // Onboarding complete - save cathedral music state before navigating
+      if (cathedralSongs.length > 0) {
+        // Stop the player before navigating
+        if (cathedralPlayer) {
+          try {
+            cathedralPlayer.pause();
+          } catch (error) {
+            console.log('Error pausing cathedral player:', error);
+          }
+        }
+
+        await AsyncStorage.setItem('cathedralMusic', JSON.stringify({
+          songs: cathedralSongs,
+          currentIndex: currentCathedralIndex,
+        }));
+      }
+
+      // Navigate to plans (paywall) screen
       router.push('/plans');
     }
   };
@@ -246,7 +351,25 @@ export default function Onboarding() {
         <View style={styles.welcomeContainer}>
           <TouchableOpacity
             style={styles.skipButton}
-            onPress={() => router.push('/(tabs)/verses')}
+            onPress={async () => {
+              // Save cathedral music state before skipping
+              if (cathedralSongs.length > 0) {
+                // Stop the player before navigating
+                if (cathedralPlayer) {
+                  try {
+                    cathedralPlayer.pause();
+                  } catch (error) {
+                    console.log('Error pausing cathedral player:', error);
+                  }
+                }
+
+                await AsyncStorage.setItem('cathedralMusic', JSON.stringify({
+                  songs: cathedralSongs,
+                  currentIndex: currentCathedralIndex,
+                }));
+              }
+              router.push('/plans');
+            }}
           >
             <Text style={styles.skipButtonText}>Skip</Text>
           </TouchableOpacity>
@@ -445,8 +568,8 @@ export default function Onboarding() {
       return (
         <Animated.View style={[styles.trialContainer, { opacity: fadeAnim1 }]}>
           <View style={styles.trialTitleContainer}>
-            <Text style={styles.trialTitle}>We want you to try</Text>
-            <Text style={styles.trialTitleHighlight}>Bible for Beginners</Text>
+            <Text style={styles.trialTitle}>We want you to try our</Text>
+            <Text style={styles.trialTitleHighlight}>Holy Bible App</Text>
             <Text style={styles.trialTitle}>for free</Text>
           </View>
         </Animated.View>

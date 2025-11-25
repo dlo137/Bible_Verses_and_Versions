@@ -1,12 +1,14 @@
 import { Tabs } from 'expo-router';
 import { NavProvider } from '../../context/NavContext';
+import { AudioProvider } from '../../context/AudioContext';
 import { View, StyleSheet, Animated, Dimensions } from 'react-native';
 import { useNav } from '../../context/NavContext';
+import { BlurView } from 'expo-blur';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 function TabsWithBackground() {
-  const { currentBgImage, bgFadeAnim } = useNav();
+  const { currentBgImage, bgFadeAnim, blurIntensity } = useNav();
 
   return (
     <View style={styles.container}>
@@ -16,6 +18,21 @@ function TabsWithBackground() {
         style={[styles.backgroundImage, { opacity: bgFadeAnim }]}
         resizeMode="cover"
       />
+      {/* Animated Blur Overlay */}
+      <Animated.View
+        style={[
+          StyleSheet.absoluteFillObject,
+          {
+            opacity: blurIntensity.interpolate({
+              inputRange: [0, 10],
+              outputRange: [0, 1],
+            }),
+          },
+        ]}
+        pointerEvents="none"
+      >
+        <BlurView intensity={10} style={StyleSheet.absoluteFillObject} />
+      </Animated.View>
       <View style={styles.overlay} />
       <Tabs
         screenOptions={{
@@ -29,6 +46,7 @@ function TabsWithBackground() {
         <Tabs.Screen name="bible" options={{ title: 'Bible' }} />
         <Tabs.Screen name="favorites" options={{ title: 'Favorites' }} />
         <Tabs.Screen name="profile" options={{ title: 'Profile' }} />
+        <Tabs.Screen name="songs" options={{ title: 'Songs', href: null }} />
         <Tabs.Screen name="ChooseBook" options={{ title: 'Choose Book', href: null }} />
         <Tabs.Screen name="ChooseChapter" options={{ title: 'Choose Chapter', href: null }} />
         <Tabs.Screen name="ChooseVerse" options={{ title: 'Choose Verse', href: null }} />
@@ -40,7 +58,9 @@ function TabsWithBackground() {
 export default function TabLayout() {
   return (
     <NavProvider>
-      <TabsWithBackground />
+      <AudioProvider>
+        <TabsWithBackground />
+      </AudioProvider>
     </NavProvider>
   );
 }

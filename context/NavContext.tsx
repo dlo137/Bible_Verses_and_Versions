@@ -1,9 +1,9 @@
-import { createContext, useContext, useState, ReactNode, useRef } from 'react';
+import { createContext, useContext, useState, ReactNode, useRef, useEffect } from 'react';
 import { Animated, Image } from 'react-native';
 import { getBackgroundImages, BibleVerse } from '../lib/supabase';
 
 // Number of background images in Supabase bucket (named 1.jpg, 2.jpg, etc.)
-const BACKGROUND_IMAGE_COUNT = 10;
+const BACKGROUND_IMAGE_COUNT = 33;
 const BACKGROUND_IMAGES = getBackgroundImages(BACKGROUND_IMAGE_COUNT);
 
 interface NavContextType {
@@ -16,6 +16,7 @@ interface NavContextType {
   isButtonVisible: boolean;
   setIsButtonVisible: (visible: boolean) => void;
   bgFadeAnim: Animated.Value;
+  blurIntensity: Animated.Value;
   animateBgChange: (newIndex: number) => Promise<void>;
   currentVerse: BibleVerse | null;
   setCurrentVerse: (verse: BibleVerse | null) => void;
@@ -31,6 +32,16 @@ export function NavProvider({ children }: { children: ReactNode }) {
   );
   const [currentVerse, setCurrentVerse] = useState<BibleVerse | null>(null);
   const bgFadeAnim = useRef(new Animated.Value(1)).current;
+  const blurIntensity = useRef(new Animated.Value(0)).current;
+
+  // Sync blur animation with isNavVisible state
+  useEffect(() => {
+    Animated.timing(blurIntensity, {
+      toValue: isNavVisible ? 10 : 0,
+      duration: 750,
+      useNativeDriver: false,
+    }).start();
+  }, [isNavVisible]);
 
   const toggleNav = () => {
     setIsNavVisible(prev => !prev);
@@ -88,6 +99,7 @@ export function NavProvider({ children }: { children: ReactNode }) {
       isButtonVisible,
       setIsButtonVisible,
       bgFadeAnim,
+      blurIntensity,
       animateBgChange,
       currentVerse,
       setCurrentVerse,

@@ -1,9 +1,49 @@
 import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import BottomNav from '../../components/BottomNav';
 import { supabase, BibleVerse } from '../../lib/supabase';
 import { useFavorites } from '../../context/FavoritesContext';
+
+// Get a consistent random short verse for today based on date
+const getDailyVerse = async (): Promise<BibleVerse | null> => {
+  try {
+    // Use today's date as a seed for consistent daily verse
+    const today = new Date();
+    const dateString = `${today.getFullYear()}-${today.getMonth()}-${today.getDate()}`;
+
+    // Fetch short verses only (under 120 characters to fit in 2 lines)
+    const { data: shortVerses, error } = await supabase
+      .from('bible_verses')
+      .select('*')
+      .lt('text', 'z'.repeat(120)) // Approximate filter for short text
+      .order('id', { ascending: true });
+
+    if (error || !shortVerses) {
+      console.error('Error fetching verses:', error);
+      return null;
+    }
+
+    // Filter to only verses with text under 120 characters
+    const filteredVerses = shortVerses.filter(v => v.text.length <= 120);
+
+    if (filteredVerses.length === 0) return null;
+
+    // Generate a consistent index based on the date
+    let hash = 0;
+    for (let i = 0; i < dateString.length; i++) {
+      hash = ((hash << 5) - hash) + dateString.charCodeAt(i);
+      hash = hash & hash;
+    }
+    const index = Math.abs(hash) % filteredVerses.length;
+
+    return filteredVerses[index];
+  } catch (err) {
+    console.error('Error fetching daily verse:', err);
+    return null;
+  }
+};
 
 const CATEGORIES = [
   'Love', 'Anxiety',
@@ -13,16 +53,35 @@ const CATEGORIES = [
   'Stress', 'Hope',
   'Peace', 'Grief',
   'Courage', 'Wisdom',
-  'Patience', 'Gratitude',
 ];
 
 export default function Search() {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [results, setResults] = useState<BibleVerse[]>([]);
   const [loading, setLoading] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [hasSubmitted, setHasSubmitted] = useState(false);
+  const [dailyVerse, setDailyVerse] = useState<BibleVerse | null>(null);
   const { toggleFavorite, isFavorite } = useFavorites();
+
+  // Navigate to Bible screen with highlighted verse
+  const navigateToVerse = (verse: BibleVerse) => {
+    router.push({
+      pathname: '/(tabs)/bible',
+      params: {
+        book: verse.book_name,
+        chapter: verse.chapter.toString(),
+        verse: verse.verse.toString(),
+        highlight: verse.verse.toString(),
+      },
+    });
+  };
+
+  // Fetch verse of the day on mount
+  useEffect(() => {
+    getDailyVerse().then(setDailyVerse);
+  }, []);
 
   // Search function using ilike for keyword matching across multiple fields
   const searchVerses = useCallback(async (query: string) => {
@@ -115,6 +174,23 @@ export default function Search() {
     searchVerses(category);
   };
 
+  // Handle like button press - toggles favorite (like count updated in FavoritesContext)
+  const handleLikePress = async (verse: BibleVerse) => {
+    const wasLiked = isFavorite(verse.id);
+
+    // Toggle favorite (this also updates like count in database)
+    await toggleFavorite(verse);
+
+    // Update local results with new count
+    setResults(prevResults =>
+      prevResults.map(v =>
+        v.id === verse.id
+          ? { ...v, like_count: wasLiked ? Math.max(0, (v.like_count || 1) - 1) : (v.like_count || 0) + 1 }
+          : v
+      )
+    );
+  };
+
   // Check if we should show results (search is focused OR user has submitted a search)
   const showResults = (isSearchFocused || hasSubmitted) && (searchQuery.trim() !== '' || results.length > 0);
 
@@ -166,26 +242,37 @@ export default function Search() {
               </View>
             ) : results.length > 0 ? (
               results.map((verse) => (
-                <View key={verse.id} style={styles.resultItem}>
+                <TouchableOpacity
+                  key={verse.id}
+                  style={styles.resultItem}
+                  onPress={() => navigateToVerse(verse)}
+                  activeOpacity={0.7}
+                >
                   <View style={styles.resultHeader}>
                     <Text style={styles.resultReference}>
                       {verse.book_name} {verse.chapter}:{verse.verse}
                     </Text>
                     <TouchableOpacity
-                      style={styles.saveIconButton}
-                      onPress={() => toggleFavorite(verse)}
+                      style={styles.likeButton}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handleLikePress(verse);
+                      }}
                     >
                       <Ionicons
                         name={isFavorite(verse.id) ? "heart" : "heart-outline"}
                         size={20}
                         color={isFavorite(verse.id) ? "#E74C3C" : "#C9A227"}
                       />
+                      <Text style={styles.likeCount}>
+                        {verse.like_count || 0}
+                      </Text>
                     </TouchableOpacity>
                   </View>
                   <Text style={styles.resultText} numberOfLines={3}>
                     {verse.text}
                   </Text>
-                </View>
+                </TouchableOpacity>
               ))
             ) : searchQuery.trim() !== '' ? (
               <View style={styles.noResultsContainer}>
@@ -200,6 +287,23 @@ export default function Search() {
             contentContainerStyle={styles.categoriesContainer}
             showsVerticalScrollIndicator={false}
           >
+            {/* Verse of the Day */}
+            <View style={styles.verseOfDayItem}>
+              <Text style={styles.verseOfDayTitle}>Verse of the Day</Text>
+              {dailyVerse ? (
+                <>
+                  <Text style={styles.verseOfDayText}>
+                    "{dailyVerse.text}"
+                  </Text>
+                  <Text style={styles.verseOfDayReference}>
+                    {dailyVerse.book_name} {dailyVerse.chapter}:{dailyVerse.verse}
+                  </Text>
+                </>
+              ) : (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              )}
+            </View>
+
             <View style={styles.categoriesGrid}>
               {CATEGORIES.map((category, index) => (
                 <TouchableOpacity
@@ -265,6 +369,34 @@ const styles = StyleSheet.create({
   categoriesContainer: {
     paddingBottom: 100,
   },
+  verseOfDayItem: {
+    width: '100%',
+    backgroundColor: 'rgba(50, 50, 50, 0.5)',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  verseOfDayTitle: {
+    fontSize: 12,
+    color: '#C9A227',
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
+  verseOfDayText: {
+    fontSize: 15,
+    color: '#FFFFFF',
+    fontWeight: '400',
+    lineHeight: 22,
+    marginBottom: 8,
+  },
+  verseOfDayReference: {
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontWeight: '500',
+  },
   categoriesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -311,8 +443,16 @@ const styles = StyleSheet.create({
     color: '#C9A227',
     fontWeight: '600',
   },
-  saveIconButton: {
+  likeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     padding: 4,
+    gap: 4,
+  },
+  likeCount: {
+    fontSize: 14,
+    color: '#C9A227',
+    fontWeight: '500',
   },
   resultText: {
     fontSize: 15,

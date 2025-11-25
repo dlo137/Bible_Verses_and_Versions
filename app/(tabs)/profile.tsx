@@ -104,7 +104,7 @@ export default function ProfileScreen() {
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>B</Text>
           </View>
-          <Text style={styles.appName}>Bible App</Text>
+          <Text style={styles.appName}>Holy Bible Verse</Text>
           <Text style={styles.version}>Version 1.0.0</Text>
         </View>
 

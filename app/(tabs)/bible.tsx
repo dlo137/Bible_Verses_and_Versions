@@ -7,43 +7,131 @@ import { supabase, BibleVerse } from '../../lib/supabase';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
+// Bible books in order with chapter counts
+const BIBLE_BOOKS = [
+  { name: 'Genesis', chapters: 50 },
+  { name: 'Exodus', chapters: 40 },
+  { name: 'Leviticus', chapters: 27 },
+  { name: 'Numbers', chapters: 36 },
+  { name: 'Deuteronomy', chapters: 34 },
+  { name: 'Joshua', chapters: 24 },
+  { name: 'Judges', chapters: 21 },
+  { name: 'Ruth', chapters: 4 },
+  { name: '1 Samuel', chapters: 31 },
+  { name: '2 Samuel', chapters: 24 },
+  { name: '1 Kings', chapters: 22 },
+  { name: '2 Kings', chapters: 25 },
+  { name: '1 Chronicles', chapters: 29 },
+  { name: '2 Chronicles', chapters: 36 },
+  { name: 'Ezra', chapters: 10 },
+  { name: 'Nehemiah', chapters: 13 },
+  { name: 'Esther', chapters: 10 },
+  { name: 'Job', chapters: 42 },
+  { name: 'Psalms', chapters: 150 },
+  { name: 'Proverbs', chapters: 31 },
+  { name: 'Ecclesiastes', chapters: 12 },
+  { name: 'Song of Solomon', chapters: 8 },
+  { name: 'Isaiah', chapters: 66 },
+  { name: 'Jeremiah', chapters: 52 },
+  { name: 'Lamentations', chapters: 5 },
+  { name: 'Ezekiel', chapters: 48 },
+  { name: 'Daniel', chapters: 12 },
+  { name: 'Hosea', chapters: 14 },
+  { name: 'Joel', chapters: 3 },
+  { name: 'Amos', chapters: 9 },
+  { name: 'Obadiah', chapters: 1 },
+  { name: 'Jonah', chapters: 4 },
+  { name: 'Micah', chapters: 7 },
+  { name: 'Nahum', chapters: 3 },
+  { name: 'Habakkuk', chapters: 3 },
+  { name: 'Zephaniah', chapters: 3 },
+  { name: 'Haggai', chapters: 2 },
+  { name: 'Zechariah', chapters: 14 },
+  { name: 'Malachi', chapters: 4 },
+  { name: 'Matthew', chapters: 28 },
+  { name: 'Mark', chapters: 16 },
+  { name: 'Luke', chapters: 24 },
+  { name: 'John', chapters: 21 },
+  { name: 'Acts', chapters: 28 },
+  { name: 'Romans', chapters: 16 },
+  { name: '1 Corinthians', chapters: 16 },
+  { name: '2 Corinthians', chapters: 13 },
+  { name: 'Galatians', chapters: 6 },
+  { name: 'Ephesians', chapters: 6 },
+  { name: 'Philippians', chapters: 4 },
+  { name: 'Colossians', chapters: 4 },
+  { name: '1 Thessalonians', chapters: 5 },
+  { name: '2 Thessalonians', chapters: 3 },
+  { name: '1 Timothy', chapters: 6 },
+  { name: '2 Timothy', chapters: 4 },
+  { name: 'Titus', chapters: 3 },
+  { name: 'Philemon', chapters: 1 },
+  { name: 'Hebrews', chapters: 13 },
+  { name: 'James', chapters: 5 },
+  { name: '1 Peter', chapters: 5 },
+  { name: '2 Peter', chapters: 3 },
+  { name: '1 John', chapters: 5 },
+  { name: '2 John', chapters: 1 },
+  { name: '3 John', chapters: 1 },
+  { name: 'Jude', chapters: 1 },
+  { name: 'Revelation', chapters: 22 },
+];
+
 // Bible version data
 const ENGLISH_VERSIONS = [
   { code: 'KJV', name: 'King James Version' },
   { code: 'ASV', name: 'American Standard Version' },
-  { code: 'ESV', name: 'English Standard Version' },
-  { code: 'NIV', name: 'New International Version' },
-  { code: 'HCSB', name: 'Holman Christian Standard Bible' },
-  { code: 'NLT', name: 'New Living Translation' },
 ];
 
 export default function Bible() {
   const router = useRouter();
   const params = useLocalSearchParams();
 
-  // Get book/chapter/verse from navigation params
-  const selectedBook = params.book as string | undefined;
-  const selectedChapter = params.chapter as string | undefined;
-  const selectedVerse = params.verse as string | undefined;
+  // Get book/chapter/verse from navigation params, default to Genesis 1:1
+  const selectedBook = (params.book as string) || 'Genesis';
+  const selectedChapter = (params.chapter as string) || '1';
+  const selectedVerse = (params.verse as string) || '1';
+  const highlightVerse = params.highlight as string | undefined;
 
   const [selectedVersion, setSelectedVersion] = useState('ASV');
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [isTextSizeModalVisible, setIsTextSizeModalVisible] = useState(false);
   const [verses, setVerses] = useState<BibleVerse[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [fontSize, setFontSize] = useState(18);
 
   // Animation values
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const textSizeSlideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const textSizeFadeAnim = useRef(new Animated.Value(0)).current;
+  const scrollViewRef = useRef<ScrollView>(null);
 
-  // Load verses when book/chapter changes
+  // Store verse positions for scrolling
+  const versePositions = useRef<{ [key: string]: number }>({});
+
+  // Load verses when book/chapter/version changes
   useEffect(() => {
     if (selectedBook && selectedChapter) {
-      fetchVerses(selectedBook, parseInt(selectedChapter, 10));
+      fetchVerses(selectedBook, parseInt(selectedChapter, 10), selectedVersion);
     }
-  }, [selectedBook, selectedChapter]);
+  }, [selectedBook, selectedChapter, selectedVersion]);
+
+  // Scroll to highlighted verse after verses load
+  useEffect(() => {
+    if (highlightVerse && verses.length > 0 && !isLoading) {
+      // Small delay to ensure layout is complete
+      setTimeout(() => {
+        const position = versePositions.current[highlightVerse];
+        if (position !== undefined && scrollViewRef.current) {
+          scrollViewRef.current.scrollTo({ y: position - 100, animated: true });
+        }
+      }, 300);
+    }
+  }, [highlightVerse, verses, isLoading]);
 
   // Fetch verses from Supabase
-  const fetchVerses = async (book: string, chapter: number) => {
+  const fetchVerses = async (book: string, chapter: number, version: string) => {
     setIsLoading(true);
     try {
       const { data, error } = await supabase
@@ -51,6 +139,7 @@ export default function Bible() {
         .select('*')
         .eq('book_name', book)
         .eq('chapter', chapter)
+        .eq('translation_id', version)
         .order('verse', { ascending: true });
 
       if (error) {
@@ -72,31 +161,57 @@ export default function Bible() {
     router.push('/(tabs)/ChooseBook' as any);
   };
 
+  // Get current book info
+  const getCurrentBookIndex = () => BIBLE_BOOKS.findIndex(b => b.name === selectedBook);
+  const getCurrentBook = () => BIBLE_BOOKS[getCurrentBookIndex()] || BIBLE_BOOKS[0];
+
   // Navigate to previous chapter
   const goToPreviousChapter = () => {
-    if (selectedBook && selectedChapter) {
-      const currentChapter = parseInt(selectedChapter, 10);
-      if (currentChapter > 1) {
-        router.setParams({
-          book: selectedBook,
-          chapter: (currentChapter - 1).toString(),
-          verse: '1'
-        });
-      }
+    const currentChapter = parseInt(selectedChapter, 10);
+    const currentBookIndex = getCurrentBookIndex();
+
+    if (currentChapter > 1) {
+      // Go to previous chapter in same book
+      router.setParams({
+        book: selectedBook,
+        chapter: (currentChapter - 1).toString(),
+        verse: '1'
+      });
+    } else if (currentBookIndex > 0) {
+      // Go to last chapter of previous book
+      const previousBook = BIBLE_BOOKS[currentBookIndex - 1];
+      router.setParams({
+        book: previousBook.name,
+        chapter: previousBook.chapters.toString(),
+        verse: '1'
+      });
     }
+    // If at Genesis 1, do nothing (beginning of Bible)
   };
 
   // Navigate to next chapter
   const goToNextChapter = () => {
-    if (selectedBook && selectedChapter) {
-      const currentChapter = parseInt(selectedChapter, 10);
-      // Navigate to next chapter (you may want to add max chapter validation later)
+    const currentChapter = parseInt(selectedChapter, 10);
+    const currentBookIndex = getCurrentBookIndex();
+    const currentBook = getCurrentBook();
+
+    if (currentChapter < currentBook.chapters) {
+      // Go to next chapter in same book
       router.setParams({
         book: selectedBook,
         chapter: (currentChapter + 1).toString(),
         verse: '1'
       });
+    } else if (currentBookIndex < BIBLE_BOOKS.length - 1) {
+      // Go to first chapter of next book
+      const nextBook = BIBLE_BOOKS[currentBookIndex + 1];
+      router.setParams({
+        book: nextBook.name,
+        chapter: '1',
+        verse: '1'
+      });
     }
+    // If at Revelation 22, do nothing (end of Bible)
   };
 
   const openModal = () => {
@@ -137,6 +252,43 @@ export default function Bible() {
     setSelectedVersion(code);
   };
 
+  // Text size modal functions
+  const openTextSizeModal = () => {
+    setIsTextSizeModalVisible(true);
+    Animated.parallel([
+      Animated.spring(textSizeSlideAnim, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 65,
+        friction: 11,
+      }),
+      Animated.timing(textSizeFadeAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const closeTextSizeModal = () => {
+    Animated.parallel([
+      Animated.timing(textSizeSlideAnim, {
+        toValue: SCREEN_HEIGHT,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+      Animated.timing(textSizeFadeAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setIsTextSizeModalVisible(false);
+    });
+  };
+
+  const FONT_SIZES = [14, 16, 18, 20, 22, 24];
+
   const VersionItem = ({ code, name, isLast = false }: { code: string; name: string; isLast?: boolean }) => (
     <TouchableOpacity
       style={[styles.versionItem, !isLast && styles.versionItemBorder]}
@@ -167,25 +319,21 @@ export default function Bible() {
           {/* Book/Chapter Selector */}
           <TouchableOpacity style={styles.pillButton} onPress={openBookChapterSelector}>
             <Text style={styles.pillButtonText}>
-              {selectedBook ? `${selectedBook} ${selectedChapter}` : '1 Samuel 30'}
+              {`${selectedBook} ${selectedChapter}`}
             </Text>
             <Ionicons name="chevron-down" size={14} color="#1A1A1A" />
           </TouchableOpacity>
 
-          {/* Right Icons */}
-          <View style={styles.topBarIcons}>
-            <TouchableOpacity style={styles.iconButton}>
-              <Ionicons name="search-outline" size={22} color="#1A1A1A" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.iconButton}>
-              <Text style={styles.textSizeIcon}>Aa</Text>
-            </TouchableOpacity>
-          </View>
+          {/* Text Size Button */}
+          <TouchableOpacity style={styles.iconButton} onPress={openTextSizeModal}>
+            <Text style={styles.textSizeIcon}>Aa</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
       {/* Bible Text Section */}
       <ScrollView
+        ref={scrollViewRef}
         style={styles.textScrollView}
         contentContainerStyle={styles.textScrollContent}
         showsVerticalScrollIndicator={false}
@@ -195,16 +343,31 @@ export default function Bible() {
             <ActivityIndicator size="large" color="#1A1A1A" />
           </View>
         ) : verses.length > 0 ? (
-          verses.map((verse) => (
-            <Text key={verse.id} style={styles.verseContainer}>
-              <Text style={styles.verseNumber}>{verse.verse} </Text>
-              <Text style={styles.verseText}>{verse.text} </Text>
-            </Text>
-          ))
+          verses.map((verse) => {
+            const isHighlighted = highlightVerse && verse.verse.toString() === highlightVerse;
+            return (
+              <View
+                key={verse.id}
+                onLayout={(event) => {
+                  versePositions.current[verse.verse.toString()] = event.nativeEvent.layout.y;
+                }}
+              >
+                <Text
+                  style={[
+                    styles.verseContainer,
+                    isHighlighted && styles.highlightedVerse,
+                  ]}
+                >
+                  <Text style={styles.verseNumber}>{verse.verse} </Text>
+                  <Text style={[styles.verseText, { fontSize }]}>{verse.text} </Text>
+                </Text>
+              </View>
+            );
+          })
         ) : (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>
-              {selectedBook ? 'No verses found' : 'Select a book and chapter to start reading'}
+              No verses found
             </Text>
           </View>
         )}
@@ -213,24 +376,22 @@ export default function Bible() {
       </ScrollView>
 
       {/* Chapter Navigation Arrows */}
-      {selectedBook && selectedChapter && (
-        <View style={styles.chapterNavContainer}>
-          <TouchableOpacity
-            style={styles.chapterNavButton}
-            onPress={goToPreviousChapter}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="chevron-back" size={24} color="#1A1A1A" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.chapterNavButton}
-            onPress={goToNextChapter}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="chevron-forward" size={24} color="#1A1A1A" />
-          </TouchableOpacity>
-        </View>
-      )}
+      <View style={styles.chapterNavContainer}>
+        <TouchableOpacity
+          style={styles.chapterNavButton}
+          onPress={goToPreviousChapter}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="chevron-back" size={24} color="#1A1A1A" />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.chapterNavButton}
+          onPress={goToNextChapter}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="chevron-forward" size={24} color="#1A1A1A" />
+        </TouchableOpacity>
+      </View>
 
       <BottomNav />
 
@@ -289,6 +450,64 @@ export default function Bible() {
           </Animated.View>
         </View>
       </Modal>
+
+      {/* Text Size Modal */}
+      <Modal
+        visible={isTextSizeModalVisible}
+        transparent
+        animationType="none"
+        onRequestClose={closeTextSizeModal}
+      >
+        <View style={styles.modalContainer}>
+          {/* Backdrop */}
+          <TouchableWithoutFeedback onPress={closeTextSizeModal}>
+            <Animated.View style={[styles.modalBackdrop, { opacity: textSizeFadeAnim }]} />
+          </TouchableWithoutFeedback>
+
+          {/* Bottom Sheet */}
+          <Animated.View
+            style={[
+              styles.bottomSheet,
+              { transform: [{ translateY: textSizeSlideAnim }] }
+            ]}
+          >
+            {/* Handle */}
+            <View style={styles.sheetHandle} />
+
+            {/* Title */}
+            <Text style={styles.sheetTitle}>Text Size</Text>
+
+            {/* Font Size Options */}
+            <View style={styles.fontSizeContainer}>
+              {FONT_SIZES.map((size) => (
+                <TouchableOpacity
+                  key={size}
+                  style={[
+                    styles.fontSizeButton,
+                    fontSize === size && styles.fontSizeButtonActive,
+                  ]}
+                  onPress={() => setFontSize(size)}
+                >
+                  <Text
+                    style={[
+                      styles.fontSizeButtonText,
+                      fontSize === size && styles.fontSizeButtonTextActive,
+                      { fontSize: size - 4 },
+                    ]}
+                  >
+                    Aa
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* OK Button */}
+            <TouchableOpacity style={styles.okButton} onPress={closeTextSizeModal}>
+              <Text style={styles.okButtonText}>OK</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -327,11 +546,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#1A1A1A',
   },
-  topBarIcons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
   iconButton: {
     padding: 8,
   },
@@ -351,6 +565,12 @@ const styles = StyleSheet.create({
   },
   verseContainer: {
     marginBottom: 8,
+  },
+  highlightedVerse: {
+    backgroundColor: '#FFF59D',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
   verseNumber: {
     fontSize: 12,
@@ -514,5 +734,28 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#1A1A1A',
+  },
+  fontSizeContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  fontSizeButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 12,
+    backgroundColor: '#F5F5F5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fontSizeButtonActive: {
+    backgroundColor: '#1A1A1A',
+  },
+  fontSizeButtonText: {
+    fontWeight: '600',
+    color: '#1A1A1A',
+  },
+  fontSizeButtonTextActive: {
+    color: '#FFFFFF',
   },
 });

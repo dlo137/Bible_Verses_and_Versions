@@ -36,8 +36,9 @@ export default function Favorites() {
                 style={styles.heartButton}
                 onPress={() => removeFavorite(verse.id)}
                 activeOpacity={0.7}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
-                <Ionicons name="heart" size={20} color="#E74C3C" />
+                <Ionicons name="heart" size={24} color="#E74C3C" />
               </TouchableOpacity>
 
               {/* Verse Text */}
@@ -114,9 +115,9 @@ const styles = StyleSheet.create({
   },
   heartButton: {
     position: 'absolute',
-    top: 16,
-    right: 16,
-    padding: 4,
+    top: 8,
+    right: 8,
+    padding: 12,
   },
   verseText: {
     fontSize: 16,

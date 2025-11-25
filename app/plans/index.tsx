@@ -1,11 +1,92 @@
 import { View, Text, StyleSheet, TouchableOpacity, ImageBackground } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useState, useEffect, useRef } from 'react';
+import { useAudioPlayer } from 'expo-audio';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function Plans() {
   const router = useRouter();
 
-  const handlePurchase = () => {
+  // Cathedral music state
+  const [cathedralSongs, setCathedralSongs] = useState<{ name: string; url: string }[]>([]);
+  const [currentCathedralIndex, setCurrentCathedralIndex] = useState(0);
+  const [cathedralUrl, setCathedralUrl] = useState('');
+  const cathedralPlayer = useAudioPlayer(cathedralUrl);
+
+  // Load cathedral music from AsyncStorage on mount
+  useEffect(() => {
+    loadCathedralMusic();
+  }, []);
+
+  const loadCathedralMusic = async () => {
+    try {
+      const cathedralData = await AsyncStorage.getItem('cathedralMusic');
+      if (cathedralData) {
+        const { songs, currentIndex } = JSON.parse(cathedralData);
+        console.log('Continuing cathedral music on plans screen:', songs);
+
+        setCathedralSongs(songs);
+        setCurrentCathedralIndex(currentIndex);
+        setCathedralUrl(songs[currentIndex].url);
+      }
+    } catch (error) {
+      console.error('Error loading cathedral music on plans screen:', error);
+    }
+  };
+
+  // Auto-play when cathedral URL is set
+  useEffect(() => {
+    if (cathedralUrl && cathedralPlayer) {
+      setTimeout(() => {
+        cathedralPlayer.play();
+      }, 100);
+    }
+  }, [cathedralUrl, cathedralPlayer]);
+
+  // Listen for song end and play next song
+  useEffect(() => {
+    if (!cathedralPlayer) return;
+
+    const checkPlaybackStatus = setInterval(() => {
+      if (cathedralPlayer.playing === false && cathedralPlayer.duration > 0 &&
+          Math.abs(cathedralPlayer.currentTime - cathedralPlayer.duration) < 1) {
+        playNextCathedralSong();
+      }
+    }, 1000);
+
+    return () => clearInterval(checkPlaybackStatus);
+  }, [cathedralPlayer, currentCathedralIndex, cathedralSongs]);
+
+  const playNextCathedralSong = () => {
+    if (cathedralSongs.length === 0) return;
+
+    const nextIndex = currentCathedralIndex < cathedralSongs.length - 1
+      ? currentCathedralIndex + 1
+      : 0;
+
+    setCurrentCathedralIndex(nextIndex);
+    setCathedralUrl(cathedralSongs[nextIndex].url);
+  };
+
+  const handlePurchase = async () => {
+    // Save cathedral music state before navigating
+    if (cathedralSongs.length > 0) {
+      // Stop the player before navigating
+      if (cathedralPlayer) {
+        try {
+          cathedralPlayer.pause();
+        } catch (error) {
+          console.log('Error pausing cathedral player:', error);
+        }
+      }
+
+      await AsyncStorage.setItem('cathedralMusic', JSON.stringify({
+        songs: cathedralSongs,
+        currentIndex: currentCathedralIndex,
+      }));
+    }
+
     // Navigate to main app after purchase
     router.push('/(tabs)/verses');
   };

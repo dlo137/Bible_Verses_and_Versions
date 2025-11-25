@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Share } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, usePathname } from 'expo-router';
 import { useRef, useEffect } from 'react';
@@ -11,8 +11,28 @@ export default function BottomNav() {
   const { isNavVisible, toggleNav, isButtonVisible, currentVerse } = useNav();
   const { toggleFavorite, isFavorite } = useFavorites();
 
-  const slideAnim = useRef(new Animated.Value(100)).current;
-  const buttonAnim = useRef(new Animated.Value(0)).current;
+  const handleShare = async () => {
+    if (!currentVerse) return;
+
+    const verseText = `"${currentVerse.text}"\n\n— ${currentVerse.book_name} ${currentVerse.chapter}:${currentVerse.verse}`;
+    const appLink = 'https://apps.apple.com/app/your-app-id'; // Replace with your actual app link
+
+    try {
+      await Share.share({
+        message: `${verseText}\n\nDownload the app: ${appLink}`,
+      });
+    } catch (error) {
+      console.error('Error sharing:', error);
+    }
+  };
+
+  // Check if we're on a tab that should always show the nav
+  const isVersesScreen = pathname === '/verses' || pathname === '/(tabs)/verses';
+  const shouldAlwaysShowNav = !isVersesScreen;
+
+  // Initialize slideAnim based on current isNavVisible state to prevent re-animation on tab switch
+  const slideAnim = useRef(new Animated.Value(isNavVisible || shouldAlwaysShowNav ? 0 : 100)).current;
+  const buttonAnim = useRef(new Animated.Value(isNavVisible ? 1 : 0)).current;
   const buttonFadeAnim = useRef(new Animated.Value(0)).current;
 
   // Handle button visibility (fade in/out)
@@ -24,18 +44,24 @@ export default function BottomNav() {
         useNativeDriver: true,
       }).start();
     } else {
-      // Reset immediately when hidden
+      // Reset button fade and immediately hide nav bar on verses screen (swipe scenario)
       buttonFadeAnim.setValue(0);
-      slideAnim.setValue(100);
       buttonAnim.setValue(0);
+      // On verses screen, immediately slide nav bar down when button is hidden (user swiped)
+      if (isVersesScreen) {
+        slideAnim.setValue(100);
+      }
     }
-  }, [isButtonVisible]);
+  }, [isButtonVisible, isVersesScreen]);
 
   // Handle nav slide animation
   useEffect(() => {
+    // Always show nav on non-verses screens
+    const showNav = shouldAlwaysShowNav || isNavVisible;
+
     Animated.parallel([
       Animated.timing(slideAnim, {
-        toValue: isNavVisible ? 0 : 100,
+        toValue: showNav ? 0 : 100,
         duration: 300,
         useNativeDriver: true,
       }),
@@ -45,7 +71,7 @@ export default function BottomNav() {
         useNativeDriver: true,
       }),
     ]).start();
-  }, [isNavVisible]);
+  }, [isNavVisible, shouldAlwaysShowNav]);
 
   const tabs = [
     { name: 'Verses', route: '/(tabs)/verses', icon: 'book-outline' as const },
@@ -132,7 +158,7 @@ export default function BottomNav() {
                 { opacity: buttonAnim }
               ]}
             >
-              <TouchableOpacity style={styles.sideButtonTouchable}>
+              <TouchableOpacity style={styles.sideButtonTouchable} onPress={handleShare}>
                 <Ionicons name="share-outline" size={24} color="#1A1A1A" />
               </TouchableOpacity>
             </Animated.View>

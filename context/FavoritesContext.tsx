@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { BibleVerse } from '../lib/supabase';
+import { BibleVerse, updateLikeCount } from '../lib/supabase';
 
 const FAVORITES_KEY = '@bible_favorites';
 
@@ -62,11 +62,15 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
     };
     const newFavorites = [favoriteVerse, ...favorites];
     await saveFavorites(newFavorites);
+    // Update like count in database (increment)
+    await updateLikeCount(verse.id, true);
   };
 
   const removeFavorite = async (verseId: number) => {
     const newFavorites = favorites.filter(fav => fav.id !== verseId);
     await saveFavorites(newFavorites);
+    // Update like count in database (decrement)
+    await updateLikeCount(verseId, false);
   };
 
   const isFavorite = (verseId: number) => {
