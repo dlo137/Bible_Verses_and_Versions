@@ -39,7 +39,7 @@ export function AudioProvider({ children }: { children: ReactNode }) {
   const [currentSongIndex, setCurrentSongIndex] = useState<number | null>(null);
   const [currentSongUrl, setCurrentSongUrl] = useState<string>('');
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isRepeatOn, setIsRepeatOn] = useState(true);
+  const [isRepeatOn, setIsRepeatOn] = useState(false);
   const [isCathedralMode, setIsCathedralMode] = useState(false); // Track if playing cathedral music
 
   const player = useAudioPlayer(currentSongUrl);
@@ -57,6 +57,53 @@ export function AudioProvider({ children }: { children: ReactNode }) {
       player.loop = isRepeatOn;
     }
   }, [player, isRepeatOn]);
+
+  // Auto-play when player is ready and we want to play
+  useEffect(() => {
+    console.log('AudioContext: Auto-play effect triggered', {
+      hasPlayer: !!player,
+      isPlaying,
+      currentSongUrl,
+      currentSongIndex
+    });
+
+    if (player && isPlaying && currentSongUrl && currentSongIndex !== null) {
+      console.log('AudioContext: Attempting to play song:', currentSongUrl);
+      const timer = setTimeout(() => {
+        try {
+          player.play();
+          console.log('AudioContext: Successfully called player.play()');
+          startBarAnimations();
+        } catch (error) {
+          console.error('AudioContext: Error auto-playing song:', error);
+        }
+      }, 100);
+
+      return () => clearTimeout(timer);
+    } else {
+      console.log('AudioContext: Not playing because conditions not met');
+    }
+  }, [player, currentSongUrl]);
+
+  // Listen for song end and auto-play next song if not on repeat
+  useEffect(() => {
+    if (!player) return;
+
+    const handlePlaybackStatus = () => {
+      // When song ends and repeat is off, play next song
+      if (player.playing === false && player.duration > 0 && player.currentTime >= player.duration - 0.5) {
+        if (!isRepeatOn && songs.length > 0 && currentSongIndex !== null) {
+          console.log('AudioContext: Song ended, playing next song');
+          playNextSong();
+        }
+      }
+    };
+
+    // Check playback status periodically
+    const interval = setInterval(handlePlaybackStatus, 1000);
+
+    return () => clearInterval(interval);
+  }, [player, isRepeatOn, songs.length, currentSongIndex]);
 
   const startBarAnimations = () => {
     anim1Ref.current = Animated.loop(
@@ -95,34 +142,19 @@ export function AudioProvider({ children }: { children: ReactNode }) {
   };
 
   const playSong = (index: number) => {
-    if (songs.length === 0) return;
+    console.log('AudioContext: playSong called', { index, songsLength: songs.length });
+    if (songs.length === 0) {
+      console.log('AudioContext: No songs available, returning');
+      return;
+    }
 
+    console.log('AudioContext: Playing song:', songs[index]);
     stopBarAnimations();
     setCurrentSongIndex(index);
     setCurrentSongUrl(songs[index].url);
     setIsPlaying(true);
-
-    setTimeout(() => {
-      if (player) {
-        try {
-          player.play();
-          startBarAnimations();
-        } catch (error) {
-          console.error('Error playing song:', error);
-          // Retry after a longer delay
-          setTimeout(() => {
-            try {
-              if (player) {
-                player.play();
-                startBarAnimations();
-              }
-            } catch (retryError) {
-              console.error('Retry failed:', retryError);
-            }
-          }, 500);
-        }
-      }
-    }, 300);
+    console.log('AudioContext: Set state - url:', songs[index].url, 'isPlaying: true');
+    // The useEffect will handle playing when the player is ready
   };
 
   const togglePlayPause = () => {
@@ -164,28 +196,7 @@ export function AudioProvider({ children }: { children: ReactNode }) {
     setCurrentSongUrl(cathedralSongs[currentIndex].url);
     setIsCathedralMode(true);
     setIsPlaying(true);
-
-    setTimeout(() => {
-      if (player) {
-        try {
-          player.play();
-          startBarAnimations();
-        } catch (error) {
-          console.error('Error playing cathedral music in AudioContext:', error);
-          // Retry after a longer delay
-          setTimeout(() => {
-            try {
-              if (player) {
-                player.play();
-                startBarAnimations();
-              }
-            } catch (retryError) {
-              console.error('Retry failed:', retryError);
-            }
-          }, 500);
-        }
-      }
-    }, 300);
+    // The useEffect will handle playing when the player is ready
   };
 
   return (

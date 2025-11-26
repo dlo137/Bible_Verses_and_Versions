@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, Animated, PanResponder, ActivityIndicator, TouchableWithoutFeedback, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Animated, PanResponder, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { useState, useRef, useEffect } from 'react';
 import { getRandomVerse, BibleVerse, getBibleSongs } from '../../lib/supabase';
 import BottomNav from '../../components/BottomNav';
@@ -6,12 +6,11 @@ import { useNav } from '../../context/NavContext';
 import { useAudio } from '../../context/AudioContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function Verses() {
   const router = useRouter();
   const { backgroundImages, setIsButtonVisible, isButtonVisible, isNavVisible, toggleNav, setIsNavVisible, animateBgChange, setCurrentVerse: setNavCurrentVerse } = useNav();
-  const { songs, setSongs, currentSongIndex, isPlaying, bar1Anim, bar2Anim, bar3Anim, player, playSong, initializeCathedralMusic } = useAudio();
+  const { songs, setSongs, currentSongIndex, isPlaying, bar1Anim, bar2Anim, bar3Anim, player, playSong } = useAudio();
 
   const [currentVerse, setCurrentVerse] = useState<BibleVerse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -33,40 +32,65 @@ export default function Verses() {
 
   // Fetch initial verse on mount
   useEffect(() => {
+    console.log('Verses: Component mounted', {
+      songsLength: songs.length,
+      currentSongIndex,
+      isPlaying
+    });
     fetchNewVerse();
     loadSongs();
   }, []);
 
+  // Debug: Log when song info changes
+  useEffect(() => {
+    console.log('Verses: Song state changed', {
+      songsLength: songs.length,
+      currentSongIndex,
+      currentSong: currentSongIndex !== null ? songs[currentSongIndex]?.name : 'none',
+      isPlaying
+    });
+  }, [songs, currentSongIndex, isPlaying]);
+
   // Load songs from Supabase and start playing
   const loadSongs = async () => {
-    if (songs.length > 0) return; // Already loaded
+    console.log('Verses: loadSongs called', {
+      songsLength: songs.length,
+      currentSongIndex,
+      isPlaying
+    });
 
-    // Check if coming from onboarding with cathedral music
-    try {
-      const cathedralData = await AsyncStorage.getItem('cathedralMusic');
-      if (cathedralData) {
-        const { songs: cathedralSongs, currentIndex } = JSON.parse(cathedralData);
-        console.log('Continuing cathedral music from onboarding:', cathedralSongs);
-
-        // Initialize cathedral music in AudioContext
-        initializeCathedralMusic(cathedralSongs, currentIndex);
-
-        // Clear the storage so it doesn't replay on next visit
-        await AsyncStorage.removeItem('cathedralMusic');
-        return;
-      }
-    } catch (error) {
-      console.error('Error loading cathedral music:', error);
+    // If songs already loaded and playing, don't do anything
+    if (songs.length > 0 && currentSongIndex !== null) {
+      console.log('Verses: Songs already loaded and playing, keeping current song');
+      return;
     }
 
-    // Load regular songs if no cathedral music
-    const songList = await getBibleSongs();
-    console.log('Loaded songs:', songList);
-    setSongs(songList);
-    if (songList.length > 0) {
-      const randomIndex = Math.floor(Math.random() * songList.length);
+    // If songs loaded but not playing (e.g., direct navigation to verses screen), start playing random
+    if (songs.length > 0 && currentSongIndex === null) {
+      console.log('Verses: Songs loaded but not playing, starting random song');
+      const randomIndex = Math.floor(Math.random() * songs.length);
       playSong(randomIndex);
+      return;
     }
+
+    // Load all songs from Supabase bucket (only if not loaded yet)
+    console.log('Verses: Loading songs from Supabase');
+    const songList = await getBibleSongs();
+    console.log('Verses: Loaded songs from Supabase:', songList);
+
+    if (songList.length === 0) {
+      console.error('Verses: No songs found in Supabase bucket');
+      return;
+    }
+
+    setSongs(songList);
+
+    // Wait for songs to be set in context before playing
+    setTimeout(() => {
+      const randomIndex = Math.floor(Math.random() * songList.length);
+      console.log('Verses: Playing random song at index:', randomIndex);
+      playSong(randomIndex);
+    }, 200);
   };
 
   // Auto-play fade in audio volume when playing starts
@@ -114,21 +138,14 @@ export default function Verses() {
   // Run fade-in sequence on mount
   useEffect(() => {
     setTimeout(() => {
-      Animated.parallel([
-        Animated.sequence([
-          Animated.timing(verseFadeAnim, {
-            toValue: 1,
-            duration: 2000,
-            useNativeDriver: true,
-          }),
-          Animated.timing(referenceFadeAnim, {
-            toValue: 1,
-            duration: 2000,
-            useNativeDriver: true,
-          }),
-        ]),
-        // Fade in audio UI at the same time
-        Animated.timing(audioUIFadeAnim, {
+      // Sequence: verse -> reference -> + button -> audio UI
+      Animated.sequence([
+        Animated.timing(verseFadeAnim, {
+          toValue: 1,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(referenceFadeAnim, {
           toValue: 1,
           duration: 2000,
           useNativeDriver: true,
@@ -136,6 +153,15 @@ export default function Verses() {
       ]).start(() => {
         // Show the + button after verse and reference have faded in
         setIsButtonVisible(true);
+
+        // Then fade in the audio UI after + button appears
+        setTimeout(() => {
+          Animated.timing(audioUIFadeAnim, {
+            toValue: 1,
+            duration: 1500,
+            useNativeDriver: true,
+          }).start();
+        }, 300);
       });
     }, 800);
   }, []);
@@ -149,12 +175,7 @@ export default function Verses() {
     // Use ref to ensure we're calling the latest setIsNavVisible
     setIsNavVisibleRef.current(false);
 
-    // Fade out audio
-    Animated.timing(audioFadeAnim, {
-      toValue: 0,
-      duration: 500,
-      useNativeDriver: false,
-    }).start();
+    // Don't fade out audio - keep music playing continuously
 
     // Change background index randomly, avoiding recent images
     const getNewBgIndex = () => {
@@ -184,34 +205,31 @@ export default function Verses() {
     await animateBgChange(newIndex);
     await fetchNewVerse();
 
-    // Now run the fade-in animation for the new content and audio
-    Animated.parallel([
-      Animated.sequence([
-        Animated.timing(verseFadeAnim, {
-          toValue: 1,
-          duration: 2000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(referenceFadeAnim, {
-          toValue: 1,
-          duration: 2000,
-          useNativeDriver: true,
-        }),
-      ]),
-      // Fade in audio volume
-      Animated.timing(audioFadeAnim, {
+    // Now run the fade-in animation for the new content
+    // Sequence: verse -> reference -> + button -> audio UI
+    Animated.sequence([
+      Animated.timing(verseFadeAnim, {
         toValue: 1,
         duration: 2000,
-        useNativeDriver: false,
+        useNativeDriver: true,
       }),
-      // Fade in audio UI (song name and bars)
-      Animated.timing(audioUIFadeAnim, {
+      Animated.timing(referenceFadeAnim, {
         toValue: 1,
         duration: 2000,
         useNativeDriver: true,
       }),
     ]).start(() => {
+      // Show + button after verse and reference
       setIsButtonVisible(true);
+
+      // Then fade in audio UI after + button appears
+      setTimeout(() => {
+        Animated.timing(audioUIFadeAnim, {
+          toValue: 1,
+          duration: 1500,
+          useNativeDriver: true,
+        }).start();
+      }, 300);
     });
   };
 
@@ -263,7 +281,7 @@ export default function Verses() {
   return (
     <View style={styles.container} {...panResponder.panHandlers}>
       {/* Audio Player - Top Right */}
-      {songs.length > 0 && (
+      {songs.length > 0 && currentSongIndex !== null && (
         <Animated.View style={[styles.audioPlayerContainer, { opacity: audioUIFadeAnim }]}>
           <TouchableOpacity style={styles.audioPlayerTouchable} onPress={navigateToSongs}>
             <Text style={styles.songName} numberOfLines={1}>
@@ -326,10 +344,10 @@ export default function Verses() {
           ) : (
             <>
               <Animated.Text style={[styles.verseText, { opacity: verseFadeAnim }]}>
-                "For I know the plans I have for you," declares the Lord, "plans to prosper you and not to harm you, plans to give you hope and a future."
+                "I can do all things through Christ who strengthens me."
               </Animated.Text>
               <Animated.Text style={[styles.verseReference, { opacity: referenceFadeAnim }]}>
-                Jeremiah 29:11
+                Philippians 4:13
               </Animated.Text>
             </>
           )}
@@ -360,8 +378,8 @@ const styles = StyleSheet.create({
   songName: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#FFFFFF',
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    color: '#1A1A1A',
+    textShadowColor: 'rgba(255, 255, 255, 0.3)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
   },
@@ -374,7 +392,7 @@ const styles = StyleSheet.create({
   audioBar: {
     width: 3,
     height: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#5A5A5A',
     borderRadius: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },

@@ -1,10 +1,14 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Linking, Platform, Modal, TouchableWithoutFeedback, Keyboard } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Linking, Platform, Modal, TouchableWithoutFeedback, Keyboard, Share } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import BottomNav from '../../components/BottomNav';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { useIAP } from '../../hooks/useIAP';
 
 export default function ProfileScreen() {
+  const router = useRouter();
   const storeUrl = Platform.OS === 'android'
     ? 'https://play.google.com/store/apps/details?id=com.yourbibleapp'
     : 'https://apps.apple.com/app/idYOURAPPID?action=write-review';
@@ -18,18 +22,111 @@ export default function ProfileScreen() {
     message: ''
   });
 
+  // IAP hook for restore purchases functionality
+  const { 
+    isRestoring, 
+    restorePurchases,
+    isIAPAvailable 
+  } = useIAP({
+    onRestoreSuccess: () => {
+      console.log('✅ Restore successful from profile screen');
+      // Navigate to verses tab after user acknowledges the success alert
+      router.push('/(tabs)/verses');
+    },
+    onRestoreError: (error) => {
+      console.error('❌ Restore failed from profile screen:', error);
+      // User stays on profile screen
+    }
+  });
+
   const settings = [
-    { id: 'about', title: 'About', subtitle: 'App information' },
-    { id: 'help', title: 'Help & Support', subtitle: 'Get assistance' },
-    ...(Platform.OS === 'ios' ? [{
-      id: 'rate',
-      title: 'Rate the App',
-      subtitle: 'Share your feedback on the App Store'
-    }] : []),
+    { id: 'music', title: 'Music', subtitle: 'Browse and play songs', icon: 'musical-notes' },
+    { id: 'share', title: 'Share', subtitle: 'Share this app with friends', icon: 'share-social' },
+    { id: 'subscription', title: 'Manage Subscription', subtitle: 'View and manage your plan', icon: 'card' },
+    { 
+      id: 'restore', 
+      title: 'Restore Purchases', 
+      subtitle: isRestoring ? 'Restoring...' : 'Restore previous purchases', 
+      icon: 'refresh' 
+    },
+    // { id: 'review', title: 'Write a Review', subtitle: 'Rate us on the App Store', icon: 'star' },
+    { id: 'terms', title: 'Terms of Use', subtitle: 'Read our terms and conditions', icon: 'document-text' },
+    { id: 'privacy', title: 'Privacy Policy', subtitle: 'How we protect your data', icon: 'shield-checkmark' },
+    { id: 'about', title: 'About', subtitle: 'App information', icon: 'information-circle' },
   ];
+
+  const handleMusicPress = () => {
+    router.push('/(tabs)/songs');
+  };
+
+  const handleShareApp = async () => {
+    try {
+      const shareUrl = Platform.OS === 'ios'
+        ? 'https://apps.apple.com/app/idYOURAPPID'
+        : 'https://play.google.com/store/apps/details?id=com.yourbibleapp';
+
+      await Share.share({
+        message: `Check out this amazing Bible app! ${shareUrl}`,
+        title: 'Holy Bible Verse',
+        url: shareUrl, // iOS only
+      });
+    } catch (error) {
+      console.error('Error sharing app:', error);
+    }
+  };
+
+  const handleManageSubscription = () => {
+    const subscriptionUrl = Platform.OS === 'ios'
+      ? 'https://apps.apple.com/account/subscriptions'
+      : 'https://play.google.com/store/account/subscriptions';
+
+    Linking.openURL(subscriptionUrl);
+  };
+
+  const handleRestorePurchases = async () => {
+    if (!isIAPAvailable) {
+      Alert.alert(
+        'Demo Mode',
+        'This is demo mode in Expo Go. In production, this would restore your actual purchases.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    Alert.alert(
+      'Restore Purchases',
+      'This will restore any previous purchases you made with your Apple ID or Google account.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Restore',
+          onPress: async () => {
+            try {
+              await restorePurchases();
+            } catch (error) {
+              console.error('Error restoring purchases:', error);
+              Alert.alert(
+                'Restore Failed', 
+                'Unable to restore purchases. Please try again or contact support if the problem persists.',
+                [{ text: 'OK' }]
+              );
+            }
+          }
+        }
+      ]
+    );
+  };
 
   const handleRateApp = () => {
     Linking.openURL(storeUrl);
+  };
+
+  const handleTermsOfUse = () => {
+    Linking.openURL('https://yourdomain.com/terms');
+  };
+
+  const handlePrivacyPolicy = () => {
+    Linking.openURL('https://yourdomain.com/privacy');
   };
 
   const handleContactSubmit = async () => {
@@ -81,11 +178,26 @@ export default function ProfileScreen() {
 
   const handleSettingPress = (settingId: string) => {
     switch (settingId) {
-      case 'rate':
-        handleRateApp();
+      case 'music':
+        handleMusicPress();
         break;
-      case 'help':
-        setIsContactModalVisible(true);
+      case 'share':
+        handleShareApp();
+        break;
+      case 'subscription':
+        handleManageSubscription();
+        break;
+      case 'restore':
+        handleRestorePurchases();
+        break;
+      // case 'review':
+      //   handleRateApp();
+      //   break;
+      case 'terms':
+        handleTermsOfUse();
+        break;
+      case 'privacy':
+        handlePrivacyPolicy();
         break;
       case 'about':
         setIsAboutModalVisible(true);
@@ -99,12 +211,16 @@ export default function ProfileScreen() {
     <View style={styles.container}>
       <StatusBar style="light" />
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.profileHeader}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>B</Text>
           </View>
-          <Text style={styles.appName}>Holy Bible Verse</Text>
+          <Text style={styles.appName}>Holy Bible Verses</Text>
           <Text style={styles.version}>Version 1.0.0</Text>
         </View>
 
@@ -113,14 +229,26 @@ export default function ProfileScreen() {
           {settings.map((setting) => (
             <TouchableOpacity
               key={setting.id}
-              style={styles.settingItem}
+              style={[
+                styles.settingItem,
+                setting.id === 'restore' && isRestoring && styles.settingItemDisabled
+              ]}
               onPress={() => handleSettingPress(setting.id)}
+              disabled={setting.id === 'restore' && isRestoring}
             >
+              <View style={styles.iconContainer}>
+                <Ionicons name={setting.icon as any} size={24} color="#C9A227" />
+              </View>
               <View style={styles.settingContent}>
                 <Text style={styles.settingTitle}>{setting.title}</Text>
-                <Text style={styles.settingSubtitle}>{setting.subtitle}</Text>
+                <Text style={[
+                  styles.settingSubtitle,
+                  setting.id === 'restore' && isRestoring && styles.settingSubtitleRestoring
+                ]}>
+                  {setting.subtitle}
+                </Text>
               </View>
-              <Text style={styles.settingArrow}>›</Text>
+              <Ionicons name="chevron-forward" size={20} color="rgba(255, 255, 255, 0.7)" />
             </TouchableOpacity>
           ))}
         </View>
@@ -292,6 +420,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 60,
   },
+  scrollContent: {
+    paddingBottom: 120,
+  },
   profileHeader: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -340,6 +471,18 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 8,
   },
+  settingItemDisabled: {
+    opacity: 0.6,
+  },
+  iconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(201, 162, 39, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
   settingContent: {
     flex: 1,
   },
@@ -352,6 +495,10 @@ const styles = StyleSheet.create({
   settingSubtitle: {
     fontSize: 14,
     color: MUTED,
+  },
+  settingSubtitleRestoring: {
+    color: '#C9A227',
+    fontStyle: 'italic',
   },
   settingArrow: {
     fontSize: 24,

@@ -1,6 +1,5 @@
 import { Tabs } from 'expo-router';
 import { NavProvider } from '../../context/NavContext';
-import { AudioProvider } from '../../context/AudioContext';
 import { View, StyleSheet, Animated, Dimensions } from 'react-native';
 import { useNav } from '../../context/NavContext';
 import { BlurView } from 'expo-blur';
@@ -58,9 +57,7 @@ function TabsWithBackground() {
 export default function TabLayout() {
   return (
     <NavProvider>
-      <AudioProvider>
-        <TabsWithBackground />
-      </AudioProvider>
+      <TabsWithBackground />
     </NavProvider>
   );
 }

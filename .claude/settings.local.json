@@ -11,7 +11,14 @@
       "Bash(npm search:*)",
       "Bash(npx expo install:*)",
       "Bash(npm uninstall:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(del \"assets\\images\\android-icon-foreground.png\")",
+      "Bash(del \"assets\\images\\android-icon-background.png\")",
+      "Bash(del \"assets\\images\\android-icon-monochrome.png\")",
+      "mcp__ide__getDiagnostics",
+      "Bash(taskkill:*)",
+      "Bash(exit 0)",
+      "Bash(findstr:*)"
     ],
     "deny": [],
     "ask": []

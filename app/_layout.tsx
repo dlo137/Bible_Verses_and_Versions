@@ -1,14 +1,17 @@
 import { Stack } from 'expo-router';
 import { FavoritesProvider } from '../context/FavoritesContext';
+import { AudioProvider } from '../context/AudioContext';
 
 export default function RootLayout() {
   return (
-    <FavoritesProvider>
-      <Stack>
-        <Stack.Screen name="index" options={{ headerShown: false }} />
-        <Stack.Screen name="plans/index" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      </Stack>
-    </FavoritesProvider>
+    <AudioProvider>
+      <FavoritesProvider>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="plans/index" />
+          <Stack.Screen name="(tabs)" />
+        </Stack>
+      </FavoritesProvider>
+    </AudioProvider>
   );
 }

@@ -1,12 +1,13 @@
-import { View, Text, StyleSheet, TouchableOpacity, ImageBackground, Animated, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ImageBackground, Animated, ScrollView, Alert } from 'react-native';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { useAudioPlayer } from 'expo-audio';
-import { supabase } from '../lib/supabase';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAudio } from '../context/AudioContext';
+import { getBibleSongs } from '../lib/supabase';
+import NotificationService from '../services/NotificationService';
+import * as Device from 'expo-device';
 
-const SCREENS = ['welcome', 'prayer', 'why', 'confirmation', 'reminder', 'bad habits', 'therapy', 'free trial offer', 'trial ending reminder'];
+const SCREENS = ['welcome', 'prayer', 'why', 'confirmation', 'reminder', 'bad habits', 'therapy', 'free trial offer'];
 
 const REASONS = [
   'Deepen my relationship with God',
@@ -66,6 +67,9 @@ const BAD_HABIT_CONFIRMATIONS: { [key: string]: string } = {
   'None apply to me': 'Grow closer to God through daily Scripture and prayer.',
 };
 
+// Configure notification handler
+NotificationService.initialize();
+
 export default function Onboarding() {
   const [currentScreen, setCurrentScreen] = useState(0);
   const [selectedReasons, setSelectedReasons] = useState<string[]>([]);
@@ -74,12 +78,7 @@ export default function Onboarding() {
   const [selectedTherapy, setSelectedTherapy] = useState<string>('');
   const [reminderTime, setReminderTime] = useState(new Date());
   const router = useRouter();
-
-  // Cathedral music state
-  const [cathedralSongs, setCathedralSongs] = useState<{ name: string; url: string }[]>([]);
-  const [currentCathedralIndex, setCurrentCathedralIndex] = useState(0);
-  const [cathedralUrl, setCathedralUrl] = useState('');
-  const cathedralPlayer = useAudioPlayer(cathedralUrl);
+  const { songs, setSongs, playSong } = useAudio();
 
   // Animation values
   const fadeAnim1 = useRef(new Animated.Value(0)).current;
@@ -104,84 +103,78 @@ export default function Onboarding() {
   // Track if prayer animation has run
   const hasPrayerAnimated = useRef(false);
 
-  // Load cathedral songs on mount
+  // Track if we've started playing
+  const hasStartedPlaying = useRef(false);
+
+  // Listen for notifications while app is in foreground (for testing)
   useEffect(() => {
-    loadCathedralSongs();
+    const subscription = NotificationService.addNotificationReceivedListener((notification: any) => {
+      console.log('📬 Notification received:', notification);
+      Alert.alert(
+        notification.request.content.title || 'Notification',
+        notification.request.content.body || '',
+        [{ text: 'OK' }]
+      );
+    });
+
+    return () => subscription.remove();
   }, []);
 
-  const loadCathedralSongs = async () => {
-    try {
-      const { data, error } = await supabase.storage.from('bible_songs').list('', {
-        limit: 100,
-        offset: 0,
-      });
-
-      if (error) {
-        console.error('Error fetching cathedral songs:', error);
-        return;
-      }
-
-      // Filter for cathedral songs and sort them numerically
-      const songs = data
-        .filter(file => file.name.toLowerCase().startsWith('cathedral') &&
-                        (file.name.endsWith('.mp3') || file.name.endsWith('.m4a') || file.name.endsWith('.wav')))
-        .sort((a, b) => {
-          const numA = parseInt(a.name.match(/\d+/)?.[0] || '0');
-          const numB = parseInt(b.name.match(/\d+/)?.[0] || '0');
-          return numA - numB;
-        })
-        .map(file => ({
-          name: file.name.replace(/\.(mp3|m4a|wav)$/, ''),
-          url: `${supabase.storage.from('bible_songs').getPublicUrl(file.name).data.publicUrl}`,
-        }));
-
-      console.log('Loaded cathedral songs:', songs);
-      setCathedralSongs(songs);
-
-      // Auto-play cathedral 1.mp3 (first song)
-      if (songs.length > 0) {
-        setCathedralUrl(songs[0].url);
-        setCurrentCathedralIndex(0);
-      }
-    } catch (error) {
-      console.error('Error loading cathedral songs:', error);
-    }
+  // Request notification permissions
+  const registerForPushNotificationsAsync = async () => {
+    return await NotificationService.registerForPushNotifications();
   };
 
-  // Auto-play when cathedral URL is set
-  useEffect(() => {
-    if (cathedralUrl && cathedralPlayer) {
-      setTimeout(() => {
-        cathedralPlayer.play();
-      }, 100);
-    }
-  }, [cathedralUrl, cathedralPlayer]);
-
-  // Listen for song end and play next song
-  useEffect(() => {
-    if (!cathedralPlayer) return;
-
-    const checkPlaybackStatus = setInterval(() => {
-      if (cathedralPlayer.playing === false && cathedralPlayer.duration > 0 &&
-          Math.abs(cathedralPlayer.currentTime - cathedralPlayer.duration) < 1) {
-        // Song has ended, play next song
-        playNextCathedralSong();
-      }
-    }, 1000);
-
-    return () => clearInterval(checkPlaybackStatus);
-  }, [cathedralPlayer, currentCathedralIndex, cathedralSongs]);
-
-  const playNextCathedralSong = () => {
-    if (cathedralSongs.length === 0) return;
-
-    const nextIndex = currentCathedralIndex < cathedralSongs.length - 1
-      ? currentCathedralIndex + 1
-      : 0; // Loop back to first song
-
-    setCurrentCathedralIndex(nextIndex);
-    setCathedralUrl(cathedralSongs[nextIndex].url);
+  // TEST FUNCTION: Send immediate notification (for testing purposes)
+  const sendTestNotification = async () => {
+    await NotificationService.sendTestNotification();
   };
+
+  // Schedule daily notification
+  const scheduleDailyNotification = async (time: Date) => {
+    await NotificationService.scheduleDailyNotification(time);
+  };
+
+  // Load all songs on mount
+  useEffect(() => {
+    const loadMusic = async () => {
+      console.log('Onboarding: Starting to load music, current songs length:', songs.length);
+
+      if (songs.length === 0) {
+        console.log('Onboarding: Fetching songs from Supabase...');
+        const songList = await getBibleSongs();
+        console.log('Onboarding: Loaded songs:', songList);
+
+        if (songList.length > 0) {
+          console.log('Onboarding: Setting songs in context');
+          setSongs(songList);
+        } else {
+          console.error('Onboarding: No songs loaded from Supabase!');
+        }
+      } else {
+        console.log('Onboarding: Songs already loaded, skipping');
+      }
+    };
+
+    loadMusic();
+  }, []);
+
+  // Start playing once songs are loaded
+  useEffect(() => {
+    if (songs.length > 0 && !hasStartedPlaying.current) {
+      console.log('Onboarding: Songs loaded in context, starting playback');
+      hasStartedPlaying.current = true;
+
+      // Find Cathedral 1 song, otherwise play first song
+      const cathedral1Index = songs.findIndex(song =>
+        song.name.toLowerCase().includes('cathedral 1')
+      );
+      const indexToPlay = cathedral1Index !== -1 ? cathedral1Index : 0;
+
+      console.log('Onboarding: Playing Cathedral 1 at index:', indexToPlay, songs[indexToPlay]);
+      playSong(indexToPlay);
+    }
+  }, [songs]);
 
   // Animate prayer screen lines sequentially when on screen 1
   useEffect(() => {
@@ -268,7 +261,14 @@ export default function Onboarding() {
     fadeAnim3.setValue(0);
 
     // Start sequential fade-in animations with stagger
-    animationRef.current = Animated.stagger(2000, [
+    // Use longer delay for screen 1 (prayer) button, shorter for screens 4, 7, 8
+    let staggerDelay = 2500; // Default
+    if (currentScreen === 1) {
+      staggerDelay = 4000; // Prayer screen - longer delay
+    } else if ([4, 7, 8].includes(currentScreen)) {
+      staggerDelay = 1000; // Schedule notification, free trial, trial reminder - shorter delay
+    }
+    animationRef.current = Animated.stagger(staggerDelay, [
       Animated.timing(fadeAnim1, {
         toValue: 1,
         duration: 1200,
@@ -320,27 +320,15 @@ export default function Onboarding() {
   };
 
   const handleContinue = async () => {
+    // If we're on the reminder screen (screen 4), schedule the notification
+    if (currentScreen === 4) {
+      await scheduleDailyNotification(reminderTime);
+    }
+
     if (currentScreen < SCREENS.length - 1) {
       setCurrentScreen(currentScreen + 1);
     } else {
-      // Onboarding complete - save cathedral music state before navigating
-      if (cathedralSongs.length > 0) {
-        // Stop the player before navigating
-        if (cathedralPlayer) {
-          try {
-            cathedralPlayer.pause();
-          } catch (error) {
-            console.log('Error pausing cathedral player:', error);
-          }
-        }
-
-        await AsyncStorage.setItem('cathedralMusic', JSON.stringify({
-          songs: cathedralSongs,
-          currentIndex: currentCathedralIndex,
-        }));
-      }
-
-      // Navigate to plans (paywall) screen
+      // Onboarding complete - music continues playing via AudioContext
       router.push('/plans');
     }
   };
@@ -351,25 +339,7 @@ export default function Onboarding() {
         <View style={styles.welcomeContainer}>
           <TouchableOpacity
             style={styles.skipButton}
-            onPress={async () => {
-              // Save cathedral music state before skipping
-              if (cathedralSongs.length > 0) {
-                // Stop the player before navigating
-                if (cathedralPlayer) {
-                  try {
-                    cathedralPlayer.pause();
-                  } catch (error) {
-                    console.log('Error pausing cathedral player:', error);
-                  }
-                }
-
-                await AsyncStorage.setItem('cathedralMusic', JSON.stringify({
-                  songs: cathedralSongs,
-                  currentIndex: currentCathedralIndex,
-                }));
-              }
-              router.push('/plans');
-            }}
+            onPress={() => router.push('/plans')}
           >
             <Text style={styles.skipButtonText}>Skip</Text>
           </TouchableOpacity>
@@ -493,6 +463,15 @@ export default function Onboarding() {
               style={styles.timePicker}
             />
           </View>
+
+          {/* TEST BUTTON - Commented out for now
+          <TouchableOpacity
+            style={styles.testButton}
+            onPress={sendTestNotification}
+          >
+            <Text style={styles.testButtonText}>TEST NOTIFICATION (5 sec)</Text>
+          </TouchableOpacity>
+          */}
         </Animated.View>
       );
     }
@@ -575,24 +554,12 @@ export default function Onboarding() {
         </Animated.View>
       );
     }
-    if (currentScreen === 8) {
-      return (
-        <Animated.View style={[styles.reminderContainer, { opacity: fadeAnim1 }]}>
-          <View style={styles.dueDateReminderTextContainer}>
-            <Text style={styles.dueDateReminderText}>You'll get a reminder</Text>
-            <Text style={styles.dueDateReminderHighlight}>2 days</Text>
-            <Text style={styles.dueDateReminderText}>before your trial ends.</Text>
-          </View>
-          <Text style={styles.bellIcon}>🔔</Text>
-        </Animated.View>
-      );
-    }
     return <Text style={styles.screenName}>{SCREENS[currentScreen]}</Text>;
   };
 
   return (
     <ImageBackground
-      source={require('../assets/images/onboarding/onboarding-bg2.jpg')}
+      source={require('../assets/images/onboarding/onboarding-bg11.jpg')}
       style={styles.container}
       resizeMode="cover"
     >
@@ -603,7 +570,7 @@ export default function Onboarding() {
         <Animated.View style={{ opacity: fadeAnim3, width: '100%', alignItems: 'center', paddingHorizontal: 24 }}>
           <TouchableOpacity style={styles.button} onPress={handleContinue}>
             <Text style={styles.buttonText}>
-              {currentScreen === 0 ? "LET'S PRAY" : currentScreen === 1 ? 'AMEN' : currentScreen === 4 ? 'SCHEDULE A NOTIFICATION' : currentScreen === 8 ? 'TRY FOR $0.00' : 'CONTINUE'}
+              {currentScreen === 0 ? "LET'S PRAY" : currentScreen === 1 ? 'AMEN' : currentScreen === 4 ? 'SCHEDULE A NOTIFICATION' : 'CONTINUE'}
             </Text>
           </TouchableOpacity>
         </Animated.View>
@@ -794,6 +761,22 @@ const styles = StyleSheet.create({
   timePicker: {
     width: '100%',
     height: 200,
+  },
+  testButton: {
+    backgroundColor: 'rgba(74, 144, 226, 0.2)',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#4A90E2',
+    marginTop: 20,
+    alignSelf: 'center',
+  },
+  testButtonText: {
+    color: '#4A90E2',
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 1,
   },
   // Legacy styles for other screens
   screenName: {

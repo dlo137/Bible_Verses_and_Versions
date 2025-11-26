@@ -15,7 +15,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.yourcompany.bible",
+      "bundleIdentifier": "com.watson.bibleverses",
       "icon": "./assets/images/icon.png",
       "splash": {
         "image": "./assets/images/icon.png",
@@ -23,23 +23,28 @@
         "backgroundColor": "#ffffff"
       },
       "infoPlist": {
-        "CFBundleDisplayName": "Bible"
+        "CFBundleDisplayName": "Bible",
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIBackgroundModes": ["remote-notification"]
+      },
+      "entitlements": {
+        "com.apple.developer.in-app-payments": true
       }
     },
     "android": {
-      "package": "com.yourcompany.bible",
+      "package": "com.watson.bibleverses",
       "icon": "./assets/images/icon.png",
       "splash": {
         "image": "./assets/images/icon.png",
         "resizeMode": "contain",
         "backgroundColor": "#ffffff"
       },
-      "adaptiveIcon": {
-        "backgroundColor": "#2D2D2D",
-        "foregroundImage": "./assets/images/icon.png"
-      },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
     },
     "web": {
       "output": "static",
@@ -59,11 +64,24 @@
           }
         }
       ],
-      "expo-audio"
+      "expo-audio",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#ffffff"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "ca747462-973b-4665-a028-2a4efb504a37"
+      }
     }
   }
 }
