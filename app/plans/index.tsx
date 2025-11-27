@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, ImageBackground, Image, Animated, Modal, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ImageBackground, Image, Animated, Modal, ActivityIndicator, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
@@ -6,6 +6,7 @@ import { useAudio } from '../../context/AudioContext';
 import { getBibleSongs } from '../../lib/supabase';
 import { useIAP } from '../../hooks/useIAP';
 import NotificationService from '../../services/NotificationService';
+import { SubscriptionDebugPanel } from '../../components/SubscriptionDebugPanel';
 
 export default function Plans() {
   const router = useRouter();
@@ -139,9 +140,18 @@ export default function Plans() {
     await restorePurchases();
   };
 
+  // Handle legal links
+  const openTermsOfUse = () => {
+    Linking.openURL('https://www.apple.com/legal/internet-services/terms/site.html');
+  };
+
+  const openPrivacyPolicy = () => {
+    Linking.openURL('https://dlo137.github.io/Bible_Support-Privacy_Page/');
+  };
+
   return (
     <ImageBackground
-      source={require('../../assets/images/onboarding/onboarding-bg11.jpg')}
+      source={require('../../assets/images/onboarding/main-bg.jpg')}
       style={styles.container}
       resizeMode="cover"
     >
@@ -164,6 +174,9 @@ export default function Plans() {
           <Text style={styles.restoreButtonText}>Restore Purchase</Text>
         )}
       </TouchableOpacity>
+
+      {/* Debug Panel for Expo Go Testing */}
+      {!isIAPAvailable && <SubscriptionDebugPanel />}
 
       <View style={styles.content}>
         {/* Top Section */}
@@ -249,6 +262,17 @@ export default function Plans() {
             </TouchableOpacity>
           </Animated.View>
         </View>
+
+        {/* Legal Links */}
+        <View style={styles.legalContainer}>
+          <TouchableOpacity onPress={openTermsOfUse} style={styles.legalButton}>
+            <Text style={styles.legalText}>Terms of Use</Text>
+          </TouchableOpacity>
+          <Text style={styles.legalSeparator}> • </Text>
+          <TouchableOpacity onPress={openPrivacyPolicy} style={styles.legalButton}>
+            <Text style={styles.legalText}>Privacy Policy</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Discount Modal */}
@@ -291,6 +315,17 @@ export default function Plans() {
             <TouchableOpacity style={styles.modalDeclineButton} onPress={handleDiscountDecline}>
               <Text style={styles.modalDeclineText}>No thanks, I'll pass</Text>
             </TouchableOpacity>
+
+            {/* Legal Links */}
+            <View style={styles.legalContainer}>
+              <TouchableOpacity onPress={openTermsOfUse} style={styles.legalButton}>
+                <Text style={styles.legalText}>Terms of Use</Text>
+              </TouchableOpacity>
+              <Text style={styles.legalSeparator}> • </Text>
+              <TouchableOpacity onPress={openPrivacyPolicy} style={styles.legalButton}>
+                <Text style={styles.legalText}>Privacy Policy</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -631,5 +666,27 @@ const styles = StyleSheet.create({
     color: '#888888',
     fontSize: 14,
     fontWeight: '400',
+  },
+  legalContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 20,
+    marginBottom: 10,
+    paddingHorizontal: 20,
+  },
+  legalButton: {
+    padding: 4,
+  },
+  legalText: {
+    color: '#888888',
+    fontSize: 12,
+    fontWeight: '500',
+    textDecorationLine: 'underline',
+  },
+  legalSeparator: {
+    color: '#888888',
+    fontSize: 12,
+    fontWeight: '500',
   },
 });

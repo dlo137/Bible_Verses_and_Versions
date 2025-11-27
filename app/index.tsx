@@ -559,7 +559,7 @@ export default function Onboarding() {
 
   return (
     <ImageBackground
-      source={require('../assets/images/onboarding/onboarding-bg11.jpg')}
+      source={require('../assets/images/onboarding/main-bg.jpg')}
       style={styles.container}
       resizeMode="cover"
     >

@@ -122,11 +122,11 @@ export default function ProfileScreen() {
   };
 
   const handleTermsOfUse = () => {
-    Linking.openURL('https://yourdomain.com/terms');
+    Linking.openURL('https://www.apple.com/legal/internet-services/terms/site.html');
   };
 
   const handlePrivacyPolicy = () => {
-    Linking.openURL('https://yourdomain.com/privacy');
+    Linking.openURL('https://dlo137.github.io/Bible_Support-Privacy_Page/');
   };
 
   const handleContactSubmit = async () => {

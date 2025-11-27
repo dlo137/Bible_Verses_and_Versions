@@ -96,11 +96,7 @@ class NotificationService {
 
     if (!isNotificationsAvailable) {
       console.log('📱 Notifications not available in Expo Go, returning mock permission');
-      Alert.alert(
-        'Demo Mode',
-        'Notifications have limited support in Expo Go. In production builds, this would request real notification permissions.',
-        [{ text: 'OK' }]
-      );
+      // Don't show alert here - will be shown when scheduling
       return 'granted'; // Mock permission for Expo Go
     }
 
@@ -142,8 +138,8 @@ class NotificationService {
     if (!isNotificationsAvailable) {
       console.log('📱 Mock notification scheduled:', content.title);
       Alert.alert(
-        'Demo Notification Scheduled',
-        `Mock notification "${content.title}" scheduled for demo purposes. In production, this would be a real notification.`,
+        'Notification Scheduled (Demo)',
+        `Your daily reminder has been set! In Expo Go, this is a demonstration. In production, you'll receive real notifications at your chosen time.`,
         [{ text: 'OK' }]
       );
       return 'mock-notification-id';
