@@ -214,8 +214,11 @@ export const useIAP = (callbacks?: IAPCallbacks) => {
 
     try {
       console.log('🛍️ Fetching products:', PRODUCT_IDS);
+      // Use getSubscriptions for iOS, getProducts for Android
       const availableProducts = await safeIAPCall(
-        () => RNIap.getProducts({ skus: PRODUCT_IDS }),
+        () => Platform.OS === 'ios'
+          ? RNIap.getSubscriptions({ skus: PRODUCT_IDS })
+          : RNIap.getProducts({ skus: PRODUCT_IDS }),
         []
       );
       console.log('✅ Products fetched:', availableProducts);
@@ -297,17 +300,16 @@ export const useIAP = (callbacks?: IAPCallbacks) => {
       console.log('🛒 Initiating purchase for:', productId);
       setIsPurchasing(true);
 
-      await safeIAPCall(() => RNIap.requestPurchase({
-        sku: productId,
-        ...(Platform.OS === 'android' && {
-          subscriptionOffers: [
-            {
-              sku: productId,
-              offerToken: '', // Android specific - will be needed for Android implementation
-            },
-          ],
-        }),
-      }));
+      // Use requestSubscription for iOS, requestPurchase for Android
+      if (Platform.OS === 'ios') {
+        await safeIAPCall(() => RNIap.requestSubscription({
+          sku: productId,
+        }));
+      } else {
+        await safeIAPCall(() => RNIap.requestPurchase({
+          skus: [productId],
+        }));
+      }
     } catch (error: any) {
       console.error('❌ Purchase request failed:', error);
       setIsPurchasing(false);

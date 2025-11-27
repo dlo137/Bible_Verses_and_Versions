@@ -29,8 +29,13 @@
           "remote-notification"
         ]
       },
+      "config": {
+        "usesNonExemptEncryption": false
+      },
       "entitlements": {
-        "com.apple.developer.in-app-payments": true
+        "com.apple.developer.in-app-payments": [
+          "merchant.com.watson.bibleverses"
+        ]
       }
     },
     "android": {
