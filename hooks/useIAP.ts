@@ -14,6 +14,7 @@ try {
   if (Constants.appOwnership !== 'expo') {
     RNIap = require('react-native-iap');
     isIAPAvailable = true;
+    console.log('📦 react-native-iap loaded. Available methods:', Object.keys(RNIap).filter(key => typeof RNIap[key] === 'function').join(', '));
   }
 } catch (error) {
   console.log('react-native-iap not available, using mock mode');
@@ -62,13 +63,20 @@ type IAPCallbacks = {
 };
 
 // Your product IDs from App Store Connect
+// NOTE: These should match EXACTLY what's in App Store Connect
+// Format is usually: bundleId.productId or just productId
 const PRODUCT_IDS = Platform.select({
   ios: [
     'bible.monthly.plan',      // Regular $9.99/month
     'discounted.monthly.plan',  // Discounted $4.99/month
+    // If products don't load, try with full bundle ID:
+    // 'com.watson.bibleverses.bible.monthly.plan',
+    // 'com.watson.bibleverses.discounted.monthly.plan',
   ],
   android: [],
 }) || [];
+
+console.log('📋 Product IDs configured:', PRODUCT_IDS);
 
 export const useIAP = (callbacks?: IAPCallbacks) => {
   const [products, setProducts] = useState<Product[]>([]);
@@ -109,14 +117,14 @@ export const useIAP = (callbacks?: IAPCallbacks) => {
 
       try {
         console.log('🔌 Initializing IAP connection...');
+        console.log('📦 react-native-iap version check - methods available:', Object.keys(RNIap).filter(key => typeof RNIap[key] === 'function').slice(0, 10).join(', '));
+
         const result = await safeIAPCall(() => RNIap.initConnection(), false);
         console.log('✅ IAP connection initialized:', result);
         setConnected(true);
 
-        // Fetch available products
-        await fetchProducts();
-
-        // Set up purchase listeners
+        // Set up purchase listeners FIRST, before fetching products
+        console.log('🎧 Setting up purchase listeners...');
         if (RNIap.purchaseUpdatedListener) {
           purchaseUpdateSubscription = RNIap.purchaseUpdatedListener(
             async (purchase: Purchase) => {
@@ -142,9 +150,19 @@ export const useIAP = (callbacks?: IAPCallbacks) => {
                   }
 
                   // Finish the transaction
-                  await safeIAPCall(() => RNIap.finishTransaction({ purchase, isConsumable: false }));
+                  // v14 API: finishTransaction accepts the purchase object directly or { purchase, isConsumable }
+                  console.log('🔄 Finishing transaction...');
+                  try {
+                    await safeIAPCall(() => RNIap.finishTransaction({
+                      purchase,
+                      isConsumable: false
+                    }));
+                    console.log('✅ Transaction finished successfully');
+                  } catch (finishError) {
+                    console.error('❌ Error finishing transaction:', finishError);
+                    // Don't block the user even if finishing fails
+                  }
 
-                  console.log('✅ Transaction finished successfully');
                   setIsPurchasing(false);
 
                   // Grant access to user
@@ -168,7 +186,10 @@ export const useIAP = (callbacks?: IAPCallbacks) => {
         if (RNIap.purchaseErrorListener) {
           purchaseErrorSubscription = RNIap.purchaseErrorListener(
             (error: PurchaseError) => {
-              console.error('❌ Purchase error:', error);
+              console.error('❌ Purchase error listener triggered');
+              console.error('❌ Error code:', error?.code);
+              console.error('❌ Error message:', error?.message);
+              console.error('❌ Full error:', JSON.stringify(error, null, 2));
               setIsPurchasing(false);
 
               if (error.code !== 'E_USER_CANCELLED') {
@@ -179,12 +200,20 @@ export const useIAP = (callbacks?: IAPCallbacks) => {
                   [{ text: 'OK' }]
                 );
                 callbacks?.onPurchaseError?.(errorMessage);
+              } else {
+                console.log('ℹ️ User cancelled the purchase');
               }
             }
           );
         }
+
+        console.log('✅ Purchase listeners set up successfully');
+
+        // Now fetch available products AFTER listeners are ready
+        await fetchProducts();
       } catch (error) {
         console.error('❌ Failed to initialize IAP:', error);
+        console.error('❌ Initialization error details:', JSON.stringify(error, null, 2));
         setConnected(false);
       }
     };
@@ -213,50 +242,71 @@ export const useIAP = (callbacks?: IAPCallbacks) => {
     }
 
     try {
-      console.log('🛍️ Fetching products:', PRODUCT_IDS);
+      console.log('🛍️ Fetching products with IDs:', PRODUCT_IDS);
+      console.log('🔍 RNIap.fetchProducts exists?', typeof RNIap.fetchProducts);
 
-      // In v14+, use getProducts for both iOS and Android subscriptions
-      // The skus parameter should be an array, not an object
+      // v14 API: Use fetchProducts with type: 'subs' for subscriptions
       let availableProducts = [];
 
-      if (Platform.OS === 'ios') {
-        // For iOS subscriptions, try getSubscriptions first, fallback to getProducts
-        if (typeof RNIap.getSubscriptions === 'function') {
-          availableProducts = await safeIAPCall(
-            () => RNIap.getSubscriptions({ skus: PRODUCT_IDS }),
-            []
-          );
-        } else {
-          // Fallback to getProducts if getSubscriptions doesn't exist
-          availableProducts = await safeIAPCall(
-            () => RNIap.getProducts({ skus: PRODUCT_IDS }),
-            []
-          );
+      try {
+        console.log('📲 Attempting fetchProducts...');
+        availableProducts = await RNIap.fetchProducts({
+          skus: PRODUCT_IDS,
+          type: 'subs', // 'subs' for subscriptions, 'in-app' for products, 'all' for both
+        });
+        console.log('✅ fetchProducts succeeded!');
+      } catch (fetchError: any) {
+        console.error('❌ fetchProducts failed:', fetchError?.message);
+        console.error('❌ Trying with type: "all" instead...');
+
+        try {
+          availableProducts = await RNIap.fetchProducts({
+            skus: PRODUCT_IDS,
+            type: 'all',
+          });
+          console.log('✅ fetchProducts with type: "all" succeeded!');
+        } catch (allError: any) {
+          console.error('❌ Both attempts failed:', allError?.message);
+          throw allError;
         }
-      } else {
-        availableProducts = await safeIAPCall(
-          () => RNIap.getProducts({ skus: PRODUCT_IDS }),
-          []
-        );
       }
 
-      console.log('✅ Products fetched:', availableProducts);
-      setProducts(availableProducts);
+      console.log('✅ Products fetched successfully:', JSON.stringify(availableProducts, null, 2));
+      console.log('📊 Number of products:', availableProducts?.length || 0);
+
+      if (availableProducts && availableProducts.length > 0) {
+        setProducts(availableProducts);
+        console.log('✅ Products set in state');
+      } else {
+        console.warn('⚠️ No products returned from App Store. Check:');
+        console.warn('  1. Product IDs match App Store Connect');
+        console.warn('  2. Products are approved and available');
+        console.warn('  3. Correct bundle ID and certificates');
+      }
     } catch (error) {
       console.error('❌ Error fetching products:', error);
+      console.error('❌ Error details:', JSON.stringify(error, null, 2));
     }
   };
 
   // Purchase a product
   const purchaseProduct = useCallback(async (productId: string) => {
+    console.log('🛒 purchaseProduct called with productId:', productId);
+
     if (!connected) {
-      Alert.alert('Error', 'Store connection not ready. Please try again.');
-      return;
+      const errorMsg = 'Store connection not ready. Please try again.';
+      console.error('❌', errorMsg);
+      Alert.alert('Error', errorMsg);
+      callbacks?.onPurchaseError?.(errorMsg);
+      throw new Error(errorMsg);
     }
 
     if (isPurchasing) {
-      Alert.alert('Please Wait', 'A purchase is already in progress.');
-      return;
+      const errorMsg = 'A purchase is already in progress.';
+      console.error('❌', errorMsg);
+      Alert.alert('Please Wait', errorMsg);
+      callbacks?.onPurchaseError?.(errorMsg);
+      throw new Error(errorMsg);
     }
 
     // Handle mock purchases in Expo Go
@@ -317,28 +367,51 @@ export const useIAP = (callbacks?: IAPCallbacks) => {
 
     try {
       console.log('🛒 Initiating purchase for:', productId);
+      console.log('📱 Platform:', Platform.OS);
+      console.log('🔍 RNIap methods available:', Object.keys(RNIap).filter(key => typeof RNIap[key] === 'function').slice(0, 15).join(', '));
+      console.log('🔍 RNIap.requestPurchase exists?', typeof RNIap.requestPurchase);
+
       setIsPurchasing(true);
 
-      // Use requestSubscription for iOS subscriptions, with fallback to requestPurchase
-      if (Platform.OS === 'ios') {
-        // Try requestSubscription first (for auto-renewable subscriptions)
-        if (typeof RNIap.requestSubscription === 'function') {
-          await safeIAPCall(() => RNIap.requestSubscription({
-            sku: productId,
-          }));
-        } else {
-          // Fallback to requestPurchase if requestSubscription doesn't exist
-          await safeIAPCall(() => RNIap.requestPurchase({
-            sku: productId,
-          }));
-        }
-      } else {
-        await safeIAPCall(() => RNIap.requestPurchase({
-          skus: [productId],
-        }));
+      // v14 API: Use requestPurchase for BOTH products and subscriptions
+      // The difference is the 'type' parameter: 'subs' for subscriptions, 'in-app' for products
+      const purchaseConfig = Platform.OS === 'ios'
+        ? {
+            type: 'subs' as const,
+            request: {
+              ios: {
+                sku: productId,
+              },
+            },
+          }
+        : {
+            type: 'subs' as const,
+            request: {
+              android: {
+                skus: [productId],
+              },
+            },
+          };
+
+      console.log('📲 [v14 API] Calling requestPurchase with config:', JSON.stringify(purchaseConfig, null, 2));
+
+      try {
+        const result = await RNIap.requestPurchase(purchaseConfig);
+        console.log('✅ requestPurchase result:', result);
+      } catch (reqError: any) {
+        console.error('❌ requestPurchase threw error:', reqError);
+        console.error('❌ Error name:', reqError?.name);
+        console.error('❌ Error message:', reqError?.message);
+        console.error('❌ Error code:', reqError?.code);
+        throw reqError;
       }
+
+      console.log('✅ requestPurchase call completed');
     } catch (error: any) {
       console.error('❌ Purchase request failed:', error);
+      console.error('❌ Error code:', error?.code);
+      console.error('❌ Error message:', error?.message);
+      console.error('❌ Full error object:', JSON.stringify(error, null, 2));
       setIsPurchasing(false);
 
       if (error.code !== 'E_USER_CANCELLED') {

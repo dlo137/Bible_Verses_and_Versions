@@ -338,12 +338,69 @@ export default function Plans() {
         {/* Live Console Panel for Debugging */}
         <View style={styles.consolePanel}>
           <Text style={styles.consoleTitle}>🔍 Live Debug Console</Text>
+
+          {/* IAP State Summary */}
+          <View style={styles.iapStateContainer}>
+            <View style={styles.iapStateRow}>
+              <Text style={styles.iapStateLabel}>IAP Available:</Text>
+              <Text style={[styles.iapStateValue, isIAPAvailable ? styles.stateGreen : styles.stateRed]}>
+                {isIAPAvailable ? '✓ YES' : '✗ NO'}
+              </Text>
+            </View>
+            <View style={styles.iapStateRow}>
+              <Text style={styles.iapStateLabel}>Connected:</Text>
+              <Text style={[styles.iapStateValue, connected ? styles.stateGreen : styles.stateRed]}>
+                {connected ? '✓ YES' : '✗ NO'}
+              </Text>
+            </View>
+            <View style={styles.iapStateRow}>
+              <Text style={styles.iapStateLabel}>Ready:</Text>
+              <Text style={[styles.iapStateValue, iapReady ? styles.stateGreen : styles.stateYellow]}>
+                {iapReady ? '✓ YES' : '⚠ NO'}
+              </Text>
+            </View>
+            <View style={styles.iapStateRow}>
+              <Text style={styles.iapStateLabel}>Products:</Text>
+              <Text style={styles.iapStateValue}>{products.length} loaded</Text>
+            </View>
+            <View style={styles.iapStateRow}>
+              <Text style={styles.iapStateLabel}>Purchasing:</Text>
+              <Text style={[styles.iapStateValue, isPurchasing ? styles.stateYellow : styles.stateGreen]}>
+                {isPurchasing ? '⚠ YES' : '✓ NO'}
+              </Text>
+            </View>
+          </View>
+
+          {/* Products Details */}
+          {products.length > 0 && (
+            <View style={styles.productsContainer}>
+              <Text style={styles.productsTitle}>📦 Available Products:</Text>
+              {products.map((product, index) => (
+                <Text key={index} style={styles.productItem}>
+                  • {product.productId}: {product.localizedPrice || product.price}
+                </Text>
+              ))}
+            </View>
+          )}
+
+          {/* Console Logs */}
+          <Text style={styles.consoleLogsHeader}>📝 Console Logs:</Text>
           <ScrollView style={styles.consoleScrollView} showsVerticalScrollIndicator={false}>
             {consoleLogs.length === 0 ? (
               <Text style={styles.consoleLogEmpty}>Waiting for logs...</Text>
             ) : (
               consoleLogs.map((log, index) => (
-                <Text key={index} style={styles.consoleLog}>{log}</Text>
+                <Text
+                  key={index}
+                  style={[
+                    styles.consoleLog,
+                    log.includes('ERROR') && styles.consoleLogError,
+                    log.includes('WARN') && styles.consoleLogWarn,
+                    log.includes('✅') && styles.consoleLogSuccess,
+                  ]}
+                >
+                  {log}
+                </Text>
               ))
             )}
           </ScrollView>
@@ -351,7 +408,7 @@ export default function Plans() {
             style={styles.consoleClearButton}
             onPress={() => setConsoleLogs([])}
           >
-            <Text style={styles.consoleClearText}>Clear</Text>
+            <Text style={styles.consoleClearText}>Clear Logs</Text>
           </TouchableOpacity>
         </View>
 
@@ -527,7 +584,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 12,
     marginVertical: 20,
-    maxHeight: 200,
+    maxHeight: 400,
     borderWidth: 1,
     borderColor: '#333333',
   },
@@ -535,11 +592,66 @@ const styles = StyleSheet.create({
     color: '#00FF00',
     fontSize: 14,
     fontWeight: '700',
-    marginBottom: 8,
+    marginBottom: 12,
     textAlign: 'center',
   },
+  iapStateContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 12,
+  },
+  iapStateRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  iapStateLabel: {
+    color: '#AAAAAA',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  iapStateValue: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  stateGreen: {
+    color: '#00FF00',
+  },
+  stateRed: {
+    color: '#FF4444',
+  },
+  stateYellow: {
+    color: '#FFAA00',
+  },
+  productsContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 12,
+  },
+  productsTitle: {
+    color: '#00AAFF',
+    fontSize: 11,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  productItem: {
+    color: '#CCCCCC',
+    fontSize: 10,
+    fontFamily: 'monospace',
+    marginBottom: 3,
+  },
+  consoleLogsHeader: {
+    color: '#FFAA00',
+    fontSize: 11,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
   consoleScrollView: {
-    maxHeight: 120,
+    maxHeight: 100,
     marginBottom: 8,
   },
   consoleLog: {
@@ -548,6 +660,15 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
     marginBottom: 2,
     lineHeight: 14,
+  },
+  consoleLogError: {
+    color: '#FF4444',
+  },
+  consoleLogWarn: {
+    color: '#FFAA00',
+  },
+  consoleLogSuccess: {
+    color: '#00FF00',
   },
   consoleLogEmpty: {
     color: '#666666',
