@@ -214,13 +214,32 @@ export const useIAP = (callbacks?: IAPCallbacks) => {
 
     try {
       console.log('🛍️ Fetching products:', PRODUCT_IDS);
-      // Use getSubscriptions for iOS, getProducts for Android
-      const availableProducts = await safeIAPCall(
-        () => Platform.OS === 'ios'
-          ? RNIap.getSubscriptions({ skus: PRODUCT_IDS })
-          : RNIap.getProducts({ skus: PRODUCT_IDS }),
-        []
-      );
+
+      // In v14+, use getProducts for both iOS and Android subscriptions
+      // The skus parameter should be an array, not an object
+      let availableProducts = [];
+
+      if (Platform.OS === 'ios') {
+        // For iOS subscriptions, try getSubscriptions first, fallback to getProducts
+        if (typeof RNIap.getSubscriptions === 'function') {
+          availableProducts = await safeIAPCall(
+            () => RNIap.getSubscriptions({ skus: PRODUCT_IDS }),
+            []
+          );
+        } else {
+          // Fallback to getProducts if getSubscriptions doesn't exist
+          availableProducts = await safeIAPCall(
+            () => RNIap.getProducts({ skus: PRODUCT_IDS }),
+            []
+          );
+        }
+      } else {
+        availableProducts = await safeIAPCall(
+          () => RNIap.getProducts({ skus: PRODUCT_IDS }),
+          []
+        );
+      }
+
       console.log('✅ Products fetched:', availableProducts);
       setProducts(availableProducts);
     } catch (error) {
@@ -300,11 +319,19 @@ export const useIAP = (callbacks?: IAPCallbacks) => {
       console.log('🛒 Initiating purchase for:', productId);
       setIsPurchasing(true);
 
-      // Use requestSubscription for iOS, requestPurchase for Android
+      // Use requestSubscription for iOS subscriptions, with fallback to requestPurchase
       if (Platform.OS === 'ios') {
-        await safeIAPCall(() => RNIap.requestSubscription({
-          sku: productId,
-        }));
+        // Try requestSubscription first (for auto-renewable subscriptions)
+        if (typeof RNIap.requestSubscription === 'function') {
+          await safeIAPCall(() => RNIap.requestSubscription({
+            sku: productId,
+          }));
+        } else {
+          // Fallback to requestPurchase if requestSubscription doesn't exist
+          await safeIAPCall(() => RNIap.requestPurchase({
+            sku: productId,
+          }));
+        }
       } else {
         await safeIAPCall(() => RNIap.requestPurchase({
           skus: [productId],
