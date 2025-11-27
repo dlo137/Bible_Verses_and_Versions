@@ -18,7 +18,9 @@
       "mcp__ide__getDiagnostics",
       "Bash(taskkill:*)",
       "Bash(exit 0)",
-      "Bash(findstr:*)"
+      "Bash(findstr:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ],
     "deny": [],
     "ask": []
