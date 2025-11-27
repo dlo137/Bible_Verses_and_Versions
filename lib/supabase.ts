@@ -17,6 +17,52 @@ export interface BibleVerse {
   like_count: number;
 }
 
+export interface CuratedVerse {
+  id: number;
+  verse_id: number;
+  category: string;
+  subcategory?: string;
+  relevance_score: number;
+  created_at: string;
+  // Joined fields from bible_verses
+  verse?: BibleVerse;
+}
+
+export type VerseCategory = 
+  | 'love'
+  | 'strength' 
+  | 'disappointment'
+  | 'hope'
+  | 'peace'
+  | 'guidance'
+  | 'faith'
+  | 'forgiveness'
+  | 'comfort'
+  | 'courage'
+  | 'gratitude'
+  | 'wisdom'
+  | 'healing'
+  | 'protection'
+  | 'purpose';
+
+export const VERSE_CATEGORIES: { value: VerseCategory; label: string; description: string }[] = [
+  { value: 'love', label: 'Love', description: 'God\'s love, self-love, loving others' },
+  { value: 'strength', label: 'Strength', description: 'Finding inner strength and perseverance' },
+  { value: 'disappointment', label: 'Disappointment', description: 'Dealing with setbacks and unmet expectations' },
+  { value: 'hope', label: 'Hope', description: 'Finding hope in difficult times' },
+  { value: 'peace', label: 'Peace', description: 'Inner peace and tranquility' },
+  { value: 'guidance', label: 'Guidance', description: 'Seeking direction and wisdom' },
+  { value: 'faith', label: 'Faith', description: 'Strengthening and growing faith' },
+  { value: 'forgiveness', label: 'Forgiveness', description: 'Forgiving others and receiving forgiveness' },
+  { value: 'comfort', label: 'Comfort', description: 'Finding comfort in times of sorrow' },
+  { value: 'courage', label: 'Courage', description: 'Finding courage to face challenges' },
+  { value: 'gratitude', label: 'Gratitude', description: 'Expressing thankfulness and appreciation' },
+  { value: 'wisdom', label: 'Wisdom', description: 'Seeking godly wisdom and understanding' },
+  { value: 'healing', label: 'Healing', description: 'Physical, emotional, and spiritual healing' },
+  { value: 'protection', label: 'Protection', description: 'God\'s protection and safety' },
+  { value: 'purpose', label: 'Purpose', description: 'Finding your calling and purpose' }
+];
+
 // Update like count for a verse
 export async function updateLikeCount(verseId: number, increment: boolean): Promise<number | null> {
   // First get current count
@@ -117,4 +163,56 @@ export async function getRandomVerse(): Promise<BibleVerse | null> {
   }
 
   return data;
+}
+
+// Get curated verses by category
+export async function getCuratedVersesByCategory(category: VerseCategory): Promise<BibleVerse[]> {
+  const { data, error } = await supabase
+    .from('curated_verses')
+    .select(`
+      *,
+      verse:bible_verses!inner(*)
+    `)
+    .eq('category', category)
+    .order('relevance_score', { ascending: false })
+    .limit(20); // Get top 20 most relevant verses
+
+  if (error) {
+    console.error('Error fetching curated verses:', error);
+    return [];
+  }
+
+  // Extract the verse data from the joined results
+  return data.map(item => item.verse as BibleVerse);
+}
+
+// Get a random curated verse from a specific category
+export async function getRandomCuratedVerse(category: VerseCategory): Promise<BibleVerse | null> {
+  const verses = await getCuratedVersesByCategory(category);
+  
+  if (verses.length === 0) {
+    console.warn(`No curated verses found for category: ${category}`);
+    // Fallback to random verse if no curated verses exist
+    return getRandomVerse();
+  }
+
+  const randomIndex = Math.floor(Math.random() * verses.length);
+  return verses[randomIndex];
+}
+
+// Get all available categories that have curated verses
+export async function getAvailableCategories(): Promise<VerseCategory[]> {
+  const { data, error } = await supabase
+    .from('curated_verses')
+    .select('category')
+    .order('category');
+
+  if (error) {
+    console.error('Error fetching categories:', error);
+    return [];
+  }
+
+  // Return unique categories
+  const uniqueCategories = [...new Set(data.map(item => item.category))] as VerseCategory[];
+  return uniqueCategories;
 }
