@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Platform, Alert } from 'react-native';
 import Constants from 'expo-constants';
 import { supabase } from '../lib/supabase';
@@ -83,6 +83,9 @@ export const useIAP = (callbacks?: IAPCallbacks) => {
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [connected, setConnected] = useState(false);
+  
+  // Add timeout ref to prevent stuck purchases
+  const purchaseTimeoutRef = useRef<any>(null);
 
   // Initialize IAP connection
   useEffect(() => {
@@ -127,30 +130,51 @@ export const useIAP = (callbacks?: IAPCallbacks) => {
         console.log('🎧 Setting up purchase listeners...');
         if (RNIap.purchaseUpdatedListener) {
           purchaseUpdateSubscription = RNIap.purchaseUpdatedListener(
-            async (purchase: Purchase) => {
-              console.log('📦 Purchase updated:', purchase);
-              const receipt = purchase.transactionReceipt;
+            async (purchase: any) => {
+              console.log('📦 Purchase updated - Full purchase object:', JSON.stringify(purchase, null, 2));
+              
+              // Log all available properties to understand the structure
+              console.log('📋 Purchase properties:', Object.keys(purchase));
+              console.log('📋 productId:', purchase.productId);
+              console.log('📋 transactionReceipt:', purchase.transactionReceipt);
+              console.log('📋 transactionId:', purchase.transactionId);
+              console.log('📋 purchaseToken:', purchase.purchaseToken);
+              console.log('📋 originalTransactionIdentifierIOS:', purchase.originalTransactionIdentifierIOS);
+              
+              // Check for various receipt/validation properties
+              const hasValidPurchase =
+                purchase.productId &&
+                (purchase.transactionId ||
+                 purchase.originalTransactionIdentifierIOS ||
+                 purchase.transactionReceipt);
 
-              if (receipt) {
+              console.log('✅ Purchase validation result:', hasValidPurchase);
+
+              if (hasValidPurchase) {
                 try {
-                  console.log('✅ Purchase successful, processing with Supabase...');
+                  console.log('✅ Valid purchase detected, processing with Supabase...');
+                  console.log('🛒 Product ID:', purchase.productId);
                   
                   // Get or create user
                   const user = await getOrCreateUser();
 
                   if (user) {
+                    console.log('👤 User found/created:', user.id);
+                    
                     // Process purchase and update Supabase
                     const result = await handlePurchase(user.id, purchase.productId, purchase);
                     
                     if (result.success) {
                       console.log('✅ Purchase processed and synced with Supabase');
+                      console.log('📊 Subscription ID:', result.subscription?.id);
                     } else {
                       console.error('❌ Error syncing purchase with Supabase:', result.error);
                     }
+                  } else {
+                    console.error('❌ Failed to get/create user');
                   }
 
                   // Finish the transaction
-                  // v14 API: finishTransaction accepts the purchase object directly or { purchase, isConsumable }
                   console.log('🔄 Finishing transaction...');
                   try {
                     await safeIAPCall(() => RNIap.finishTransaction({
@@ -163,20 +187,45 @@ export const useIAP = (callbacks?: IAPCallbacks) => {
                     // Don't block the user even if finishing fails
                   }
 
-                  setIsPurchasing(false);
-
-                  // Grant access to user
-                  Alert.alert(
-                    'Purchase Successful!',
-                    'Thank you for subscribing. Enjoy full access!',
-                    [{ text: 'OK', onPress: () => callbacks?.onPurchaseSuccess?.() }]
-                  );
-
-                  // Call success callback
-                  callbacks?.onPurchaseSuccess?.();
                 } catch (error) {
-                  console.error('❌ Error finishing transaction:', error);
-                  setIsPurchasing(false);
+                  console.error('❌ Error processing purchase:', error);
+                  console.error('❌ Error details:', JSON.stringify(error, null, 2));
+                  
+                  Alert.alert(
+                    'Purchase Processing Error',
+                    'Your purchase was successful but there was an error processing it. Please contact support.',
+                    [{ text: 'OK' }]
+                  );
+                }
+                
+                // FIX #2: Always clear loading state and timeout for valid purchases
+                setIsPurchasing(false);
+                
+                if (purchaseTimeoutRef.current) {
+                  clearTimeout(purchaseTimeoutRef.current);
+                  purchaseTimeoutRef.current = null;
+                }
+
+                // FIX #3: Always show success and navigate for valid purchases (regardless of Supabase result)
+                Alert.alert(
+                  'Purchase Successful!',
+                  'Thank you for subscribing. Enjoy full access!',
+                  [{ text: 'OK', onPress: () => callbacks?.onPurchaseSuccess?.() }]
+                );
+
+                // ALWAYS navigate after valid purchase
+                callbacks?.onPurchaseSuccess?.();
+              } else {
+                console.warn('⚠️ Purchase object missing required properties');
+                console.warn('⚠️ Purchase object keys:', Object.keys(purchase));
+                console.warn('⚠️ This might be a pending or incomplete purchase');
+                
+                // FIX #2: Add fallback cleanup so UI NEVER gets stuck
+                setIsPurchasing(false);
+
+                if (purchaseTimeoutRef.current) {
+                  clearTimeout(purchaseTimeoutRef.current);
+                  purchaseTimeoutRef.current = null;
                 }
               }
             }
@@ -372,6 +421,22 @@ export const useIAP = (callbacks?: IAPCallbacks) => {
       console.log('🔍 RNIap.requestPurchase exists?', typeof RNIap.requestPurchase);
 
       setIsPurchasing(true);
+      
+      // Clear any existing timeout
+      if (purchaseTimeoutRef.current) {
+        clearTimeout(purchaseTimeoutRef.current);
+      }
+      
+      // Set timeout to prevent stuck purchases (30 seconds)
+      purchaseTimeoutRef.current = setTimeout(() => {
+        console.warn('⏰ Purchase timeout - clearing stuck state');
+        setIsPurchasing(false);
+        Alert.alert(
+          'Purchase Timeout',
+          'The purchase is taking longer than expected. Please check your App Store account or try again.',
+          [{ text: 'OK' }]
+        );
+      }, 30000);
 
       // v14 API: Use requestPurchase for BOTH products and subscriptions
       // The difference is the 'type' parameter: 'subs' for subscriptions, 'in-app' for products
@@ -413,6 +478,12 @@ export const useIAP = (callbacks?: IAPCallbacks) => {
       console.error('❌ Error message:', error?.message);
       console.error('❌ Full error object:', JSON.stringify(error, null, 2));
       setIsPurchasing(false);
+      
+      // Clear purchase timeout
+      if (purchaseTimeoutRef.current) {
+        clearTimeout(purchaseTimeoutRef.current);
+        purchaseTimeoutRef.current = null;
+      }
 
       if (error.code !== 'E_USER_CANCELLED') {
         const errorMessage = 'Unable to start purchase. Please try again.';
