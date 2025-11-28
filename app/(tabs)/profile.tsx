@@ -6,6 +6,8 @@ import BottomNav from '../../components/BottomNav';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useIAP } from '../../hooks/useIAP';
+import { resetOnboarding } from '../../utils/onboarding';
+import { getOrCreateUser } from '../../lib/authHelper';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -129,6 +131,105 @@ export default function ProfileScreen() {
     Linking.openURL('https://dlo137.github.io/Bible_Support-Privacy_Page/');
   };
 
+  const handleLogout = async () => {
+    Alert.alert(
+      'Log Out',
+      'Are you sure you want to log out? You will need to go through onboarding again.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Log Out',
+          style: 'destructive',
+          onPress: async () => {
+            await resetOnboarding();
+            router.replace('/');
+          }
+        }
+      ]
+    );
+  };
+
+  const handleDeleteAccount = async () => {
+    Alert.alert(
+      'Delete Account',
+      'Are you sure you want to delete your account? This action cannot be undone and all your data will be permanently deleted.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Confirm Deletion',
+              'This is your final warning. Your account and all associated data will be permanently deleted. Are you absolutely sure?',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Yes, Delete My Account',
+                  style: 'destructive',
+                  onPress: async () => {
+                    try {
+                      console.log('🗑️ Starting account deletion process');
+
+                      // Get or create user (handles anonymous auth)
+                      const user = await getOrCreateUser();
+
+                      if (!user) {
+                        console.error('❌ No user found');
+                        throw new Error('Unable to authenticate user');
+                      }
+
+                      console.log('👤 User ID:', user.id);
+                      console.log('📞 Calling delete-user-data function');
+
+                      const { data, error } = await supabase.functions.invoke('delete-user-data', {
+                        body: { userId: user.id }
+                      });
+
+                      console.log('📥 Function response:', JSON.stringify({ data, error }, null, 2));
+
+                      if (error) {
+                        console.error('❌ Function returned error:', error);
+                        throw error;
+                      }
+
+                      // Check if the response indicates failure
+                      if (data && !data.success) {
+                        console.error('❌ Function returned unsuccessful response:', data);
+                        throw new Error(data.error || 'Unknown error from function');
+                      }
+
+                      console.log('✅ Data deletion successful, resetting onboarding');
+                      await resetOnboarding();
+
+                      Alert.alert(
+                        'Account Deleted',
+                        'Your account data has been deleted successfully.',
+                        [
+                          {
+                            text: 'OK',
+                            onPress: () => router.replace('/')
+                          }
+                        ]
+                      );
+                    } catch (error) {
+                      console.error('❌ Account deletion error:', error);
+                      Alert.alert(
+                        'Deletion Failed',
+                        `There was an error deleting your account data: ${error.message || 'Unknown error'}. Please try again or contact support.`,
+                        [{ text: 'OK' }]
+                      );
+                    }
+                  }
+                }
+              ]
+            );
+          }
+        }
+      ]
+    );
+  };
+
   const handleContactSubmit = async () => {
     if (!contactForm.name || !contactForm.email || !contactForm.subject || !contactForm.message) {
       Alert.alert('Incomplete Form', 'Please fill in all fields before submitting.');
@@ -202,6 +303,12 @@ export default function ProfileScreen() {
       case 'about':
         setIsAboutModalVisible(true);
         break;
+      case 'logout':
+        handleLogout();
+        break;
+      case 'delete':
+        handleDeleteAccount();
+        break;
       default:
         break;
     }
@@ -251,6 +358,41 @@ export default function ProfileScreen() {
               <Ionicons name="chevron-forward" size={20} color="rgba(255, 255, 255, 0.7)" />
             </TouchableOpacity>
           ))}
+        </View>
+
+        {/* Account Section with Danger Zone */}
+        <View style={styles.settingsSection}>
+          <Text style={styles.sectionTitle}>Account</Text>
+
+          {/* Log Out Button */}
+          <TouchableOpacity
+            style={styles.dangerItem}
+            onPress={() => handleSettingPress('logout')}
+          >
+            <View style={styles.dangerIconContainer}>
+              <Ionicons name="log-out-outline" size={24} color="#E74C3C" />
+            </View>
+            <View style={styles.settingContent}>
+              <Text style={styles.dangerTitle}>Log Out</Text>
+              <Text style={styles.settingSubtitle}>Sign out of your account</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="rgba(255, 255, 255, 0.7)" />
+          </TouchableOpacity>
+
+          {/* Delete Account Button */}
+          <TouchableOpacity
+            style={styles.dangerItem}
+            onPress={() => handleSettingPress('delete')}
+          >
+            <View style={styles.dangerIconContainer}>
+              <Ionicons name="trash-outline" size={24} color="#E74C3C" />
+            </View>
+            <View style={styles.settingContent}>
+              <Text style={styles.dangerTitle}>Delete Account</Text>
+              <Text style={styles.settingSubtitle}>Permanently delete your account</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="rgba(255, 255, 255, 0.7)" />
+          </TouchableOpacity>
         </View>
       </ScrollView>
 
@@ -628,5 +770,30 @@ const styles = StyleSheet.create({
     color: MUTED,
     fontSize: 16,
     fontWeight: '600',
+  },
+  dangerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(231, 76, 60, 0.1)',
+    borderColor: 'rgba(231, 76, 60, 0.3)',
+    borderWidth: 1,
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  dangerIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(231, 76, 60, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  dangerTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#E74C3C',
+    marginBottom: 2,
   },
 });

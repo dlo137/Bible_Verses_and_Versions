@@ -225,3 +225,21 @@ export async function getUserSubscription(userId: string): Promise<SubscriptionR
     return null;
   }
 }
+
+/**
+ * Delete all subscription data for a user
+ */
+export async function deleteUserSubscriptions(userId: string): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from('subscriptions')
+      .delete()
+      .eq('user_id', userId);
+
+    if (error) {
+      throw error;
+    }
+  } catch (error) {
+    throw error;
+  }
+}

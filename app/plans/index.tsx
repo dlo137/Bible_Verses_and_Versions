@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, ImageBackground, Image, Animated, Modal, ActivityIndicator, Linking, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ImageBackground, Image, Animated, Modal, ActivityIndicator, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
@@ -6,13 +6,13 @@ import { useAudio } from '../../context/AudioContext';
 import { getBibleSongs } from '../../lib/supabase';
 import { useIAP } from '../../hooks/useIAP';
 import NotificationService from '../../services/NotificationService';
+import { markOnboardingComplete } from '../../utils/onboarding';
 
 export default function Plans() {
   const router = useRouter();
   const { songs, setSongs, playSong } = useAudio();
   const glowAnim = useRef(new Animated.Value(0)).current;
   const [showDiscountModal, setShowDiscountModal] = useState(false);
-  const [consoleLogs, setConsoleLogs] = useState<string[]>([]);
   const [iapReady, setIapReady] = useState(false);
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [currentPurchaseAttempt, setCurrentPurchaseAttempt] = useState<'regular' | 'discount' | null>(null);
@@ -20,13 +20,6 @@ export default function Plans() {
 
   // Check if notifications are available
   const isNotificationsAvailable = NotificationService.isAvailable();
-
-  // Console logging for debugging
-  const addLog = (message: string) => {
-    const timestamp = new Date().toLocaleTimeString();
-    const logEntry = `[${timestamp}] ${message}`;
-    setConsoleLogs(prev => [logEntry, ...prev.slice(0, 19)]); // Keep last 20 logs
-  };
 
   // IAP hook
   const {
@@ -39,67 +32,37 @@ export default function Plans() {
     getProductById,
     isIAPAvailable,
   } = useIAP({
-    onPurchaseSuccess: () => {
-      console.log('✅ Purchase successful, navigating to verses...');
+    onPurchaseSuccess: async () => {
+      await markOnboardingComplete();
       setCurrentPurchaseAttempt(null); // Clear loading state
       // Navigate to verses tab after successful purchase
       router.push('/(tabs)/verses');
     },
     onPurchaseError: (error) => {
-      console.error('❌ Purchase failed:', error);
       setCurrentPurchaseAttempt(null); // Clear loading state on error
       // User stays on plans screen - no navigation
     },
-    onRestoreSuccess: () => {
-      console.log('✅ Restore successful, navigating to verses...');
+    onRestoreSuccess: async () => {
+      await markOnboardingComplete();
       // Navigate to verses tab after successful restore
       router.push('/(tabs)/verses');
     },
     onRestoreError: (error) => {
-      console.error('❌ Restore failed:', error);
       // User stays on plans screen - no navigation
     }
   });
 
-  // Override console methods for capturing logs
-  useEffect(() => {
-    const originalLog = console.log;
-    const originalError = console.error;
-    const originalWarn = console.warn;
-
-    console.log = (...args) => {
-      originalLog(...args);
-      addLog(`LOG: ${args.join(' ')}`);
-    };
-
-    console.error = (...args) => {
-      originalError(...args);
-      addLog(`ERROR: ${args.join(' ')}`);
-    };
-
-    console.warn = (...args) => {
-      originalWarn(...args);
-      addLog(`WARN: ${args.join(' ')}`);
-    };
-
-    return () => {
-      console.log = originalLog;
-      console.error = originalError;
-      console.warn = originalWarn;
-    };
-  }, []);
-
   // Initialize IAP on mount
   useEffect(() => {
     const initializeIAP = async () => {
-      if (!isIAPAvailable || hasInitializedRef.current) {
-        console.log('IAP not available or already initialized');
-        setIapReady(true);
+      if (hasInitializedRef.current) {
+        console.log('Already initialized');
         return;
       }
 
       hasInitializedRef.current = true;
       console.log('🔄 Initializing IAP...');
+      console.log('🔍 IAP Available:', isIAPAvailable);
       
       try {
         setLoadingProducts(true);
@@ -108,6 +71,11 @@ export default function Plans() {
         
         setIapReady(true);
         console.log('✅ IAP initialized successfully');
+        
+        // In Expo Go, we're ready to use mock purchases
+        if (!isIAPAvailable) {
+          console.log('📱 Running in Expo Go - mock purchases enabled');
+        }
       } catch (error) {
         console.error('❌ IAP initialization failed:', error);
         setIapReady(true); // Set ready anyway to unblock UI
@@ -123,7 +91,7 @@ export default function Plans() {
       setIapReady(true);
       setLoadingProducts(false);
       console.log('⏰ IAP initialization timeout - unblocking button');
-    }, 5000);
+    }, 3000); // Reduced timeout
 
     return () => clearTimeout(timeout);
   }, [isIAPAvailable]);
@@ -184,11 +152,6 @@ export default function Plans() {
   }, []);
 
   const handlePurchase = async () => {
-    if (!isIAPAvailable) {
-      console.log('🚫 IAP not available - showing demo mode');
-      return;
-    }
-
     if (!iapReady || loadingProducts) {
       console.log('🚫 IAP not ready yet');
       return;
@@ -198,12 +161,14 @@ export default function Plans() {
     console.log('📦 Available products:', products);
     console.log('🔗 Connected:', connected);
     console.log('⚡ IAP Ready:', iapReady);
+    console.log('🔍 IAP Available:', isIAPAvailable);
 
     // Set loading state BEFORE starting purchase
     setCurrentPurchaseAttempt('regular');
 
     try {
       // Purchase the regular plan (bible.monthly.plan - $9.99)
+      // This will trigger mock purchase in Expo Go automatically
       await purchaseProduct('bible.monthly.plan');
       // Navigation will happen in success callback
     } catch (error) {
@@ -217,12 +182,6 @@ export default function Plans() {
   };
 
   const handleDiscountAccept = async () => {
-    if (!isIAPAvailable) {
-      console.log('🚫 IAP not available - showing demo mode');
-      setShowDiscountModal(false);
-      return;
-    }
-
     if (!iapReady || loadingProducts) {
       console.log('🚫 IAP not ready yet');
       return;
@@ -232,6 +191,7 @@ export default function Plans() {
     console.log('📦 Available products:', products);
     console.log('🔗 Connected:', connected);
     console.log('⚡ IAP Ready:', iapReady);
+    console.log('🔍 IAP Available:', isIAPAvailable);
 
     setShowDiscountModal(false);
     
@@ -240,6 +200,7 @@ export default function Plans() {
 
     try {
       // Purchase the discounted plan (discounted.monthly.plan - $4.99)
+      // This will trigger mock purchase in Expo Go automatically
       await purchaseProduct('discounted.monthly.plan');
       // Navigation will happen in success callback
     } catch (error) {
@@ -335,83 +296,6 @@ export default function Plans() {
 
         </View>
 
-        {/* Live Console Panel for Debugging */}
-        <View style={styles.consolePanel}>
-          <Text style={styles.consoleTitle}>🔍 Live Debug Console</Text>
-
-          {/* IAP State Summary */}
-          <View style={styles.iapStateContainer}>
-            <View style={styles.iapStateRow}>
-              <Text style={styles.iapStateLabel}>IAP Available:</Text>
-              <Text style={[styles.iapStateValue, isIAPAvailable ? styles.stateGreen : styles.stateRed]}>
-                {isIAPAvailable ? '✓ YES' : '✗ NO'}
-              </Text>
-            </View>
-            <View style={styles.iapStateRow}>
-              <Text style={styles.iapStateLabel}>Connected:</Text>
-              <Text style={[styles.iapStateValue, connected ? styles.stateGreen : styles.stateRed]}>
-                {connected ? '✓ YES' : '✗ NO'}
-              </Text>
-            </View>
-            <View style={styles.iapStateRow}>
-              <Text style={styles.iapStateLabel}>Ready:</Text>
-              <Text style={[styles.iapStateValue, iapReady ? styles.stateGreen : styles.stateYellow]}>
-                {iapReady ? '✓ YES' : '⚠ NO'}
-              </Text>
-            </View>
-            <View style={styles.iapStateRow}>
-              <Text style={styles.iapStateLabel}>Products:</Text>
-              <Text style={styles.iapStateValue}>{products.length} loaded</Text>
-            </View>
-            <View style={styles.iapStateRow}>
-              <Text style={styles.iapStateLabel}>Purchasing:</Text>
-              <Text style={[styles.iapStateValue, isPurchasing ? styles.stateYellow : styles.stateGreen]}>
-                {isPurchasing ? '⚠ YES' : '✓ NO'}
-              </Text>
-            </View>
-          </View>
-
-          {/* Products Details */}
-          {products.length > 0 && (
-            <View style={styles.productsContainer}>
-              <Text style={styles.productsTitle}>📦 Available Products:</Text>
-              {products.map((product, index) => (
-                <Text key={index} style={styles.productItem}>
-                  • {product.productId}: {product.localizedPrice || product.price}
-                </Text>
-              ))}
-            </View>
-          )}
-
-          {/* Console Logs */}
-          <Text style={styles.consoleLogsHeader}>📝 Console Logs:</Text>
-          <ScrollView style={styles.consoleScrollView} showsVerticalScrollIndicator={false}>
-            {consoleLogs.length === 0 ? (
-              <Text style={styles.consoleLogEmpty}>Waiting for logs...</Text>
-            ) : (
-              consoleLogs.map((log, index) => (
-                <Text
-                  key={index}
-                  style={[
-                    styles.consoleLog,
-                    log.includes('ERROR') && styles.consoleLogError,
-                    log.includes('WARN') && styles.consoleLogWarn,
-                    log.includes('✅') && styles.consoleLogSuccess,
-                  ]}
-                >
-                  {log}
-                </Text>
-              ))
-            )}
-          </ScrollView>
-          <TouchableOpacity
-            style={styles.consoleClearButton}
-            onPress={() => setConsoleLogs([])}
-          >
-            <Text style={styles.consoleClearText}>Clear Logs</Text>
-          </TouchableOpacity>
-        </View>
-
         {/* Bottom Section */}
         <View style={styles.bottomSection}>
           {/* CTA Block */}
@@ -431,7 +315,7 @@ export default function Plans() {
             <TouchableOpacity
               style={styles.ctaBlockInner}
               onPress={handlePurchase}
-              disabled={!iapReady || loadingProducts || !!currentPurchaseAttempt || isPurchasing || !connected}
+              disabled={!iapReady || loadingProducts || !!currentPurchaseAttempt || isPurchasing}
             >
               {(loadingProducts || currentPurchaseAttempt || isPurchasing) ? (
                 <ActivityIndicator size="large" color="#DAA520" />
@@ -504,7 +388,7 @@ export default function Plans() {
             <TouchableOpacity
               style={styles.modalAcceptButton}
               onPress={handleDiscountAccept}
-              disabled={!iapReady || loadingProducts || !!currentPurchaseAttempt || isPurchasing || !connected}
+              disabled={!iapReady || loadingProducts || !!currentPurchaseAttempt || isPurchasing}
             >
               {(loadingProducts || currentPurchaseAttempt || isPurchasing) ? (
                 <ActivityIndicator size="small" color="#FFFFFF" />
@@ -578,116 +462,6 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'center',
     paddingBottom: 20,
-  },
-  consolePanel: {
-    backgroundColor: 'rgba(0, 0, 0, 0.9)',
-    borderRadius: 12,
-    padding: 12,
-    marginVertical: 20,
-    maxHeight: 400,
-    borderWidth: 1,
-    borderColor: '#333333',
-  },
-  consoleTitle: {
-    color: '#00FF00',
-    fontSize: 14,
-    fontWeight: '700',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  iapStateContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 12,
-  },
-  iapStateRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  iapStateLabel: {
-    color: '#AAAAAA',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  iapStateValue: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  stateGreen: {
-    color: '#00FF00',
-  },
-  stateRed: {
-    color: '#FF4444',
-  },
-  stateYellow: {
-    color: '#FFAA00',
-  },
-  productsContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 12,
-  },
-  productsTitle: {
-    color: '#00AAFF',
-    fontSize: 11,
-    fontWeight: '700',
-    marginBottom: 6,
-  },
-  productItem: {
-    color: '#CCCCCC',
-    fontSize: 10,
-    fontFamily: 'monospace',
-    marginBottom: 3,
-  },
-  consoleLogsHeader: {
-    color: '#FFAA00',
-    fontSize: 11,
-    fontWeight: '700',
-    marginBottom: 6,
-  },
-  consoleScrollView: {
-    maxHeight: 100,
-    marginBottom: 8,
-  },
-  consoleLog: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontFamily: 'monospace',
-    marginBottom: 2,
-    lineHeight: 14,
-  },
-  consoleLogError: {
-    color: '#FF4444',
-  },
-  consoleLogWarn: {
-    color: '#FFAA00',
-  },
-  consoleLogSuccess: {
-    color: '#00FF00',
-  },
-  consoleLogEmpty: {
-    color: '#666666',
-    fontSize: 11,
-    fontStyle: 'italic',
-    textAlign: 'center',
-    paddingVertical: 20,
-  },
-  consoleClearButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 6,
-    paddingVertical: 4,
-    paddingHorizontal: 12,
-    alignSelf: 'center',
-  },
-  consoleClearText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '600',
   },
   iconContainer: {
     alignItems: 'center',

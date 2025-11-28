@@ -1,13 +1,11 @@
-import { View, Text, StyleSheet, TouchableOpacity, ImageBackground, Animated, ScrollView, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ImageBackground, Image, Animated, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'expo-router';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { useAudio } from '../context/AudioContext';
 import { getBibleSongs } from '../lib/supabase';
-import NotificationService from '../services/NotificationService';
-import * as Device from 'expo-device';
+import { hasCompletedOnboarding, markOnboardingComplete } from '../utils/onboarding';
 
-const SCREENS = ['welcome', 'prayer', 'why', 'confirmation', 'reminder', 'bad habits', 'therapy', 'free trial offer'];
+const SCREENS = ['welcome', 'prayer', 'why', 'confirmation', 'bad habits', 'therapy', 'free trial offer'];
 
 const REASONS = [
   'Deepen my relationship with God',
@@ -20,11 +18,11 @@ const REASONS = [
 ];
 
 const BAD_HABITS = [
-  'Addiction',
+  'Easily distracted',
   'Doomscrolling social media',
   'Consuming negative news',
   'Excessive worrying',
-  'Pornography',
+  'Stress',
   'Substance use',
   'Procrastination',
   'None apply to me',
@@ -47,13 +45,13 @@ const THERAPY_OPTIONS = [
 ];
 
 const REASON_CONFIRMATIONS: { [key: string]: string } = {
-  'Deepen my relationship with God': 'Discover daily Scripture and prayers designed to draw you closer to God\'s heart.',
-  'Learn from Scripture': 'Explore guided Bible readings that make God\'s Word accessible and meaningful.',
-  'Practice Prayer': 'Build a consistent prayer practice with daily prompts and reflections.',
-  'Build better habits': 'Replace old patterns with faith-centered routines that transform your life.',
-  'Find community / connection': 'Connect with others on the same journey through shared reflections and encouragement.',
-  'Improve my rest and peace': 'Find rest in Scripture and prayer that calms your mind and restores your soul.',
-  'Find calm and reduce stress': 'Experience God\'s peace through daily practices that ease anxiety and worry.',
+  'Deepen my relationship with God': 'Feel closer to God with simple daily faith habits.',
+  'Learn from Scripture': 'Understand Scripture through clear, focused readings.',
+  'Practice Prayer': 'Find words when your mind feels blank or overwhelmed.',
+  'Build better habits': 'Create daily routine that is easy to stick with.',
+  'Find community / connection': 'Feel supported through shared reflections and truths.',
+  'Improve my rest and peace': "Let God's Word settle your mind before sleep.",
+  'Find calm and reduce stress': 'Use short verses and prayers to steady your heart.',
 };
 
 const BAD_HABIT_CONFIRMATIONS: { [key: string]: string } = {
@@ -67,16 +65,15 @@ const BAD_HABIT_CONFIRMATIONS: { [key: string]: string } = {
   'None apply to me': 'Grow closer to God through daily Scripture and prayer.',
 };
 
-// Configure notification handler
-NotificationService.initialize();
-
 export default function Onboarding() {
   const [currentScreen, setCurrentScreen] = useState(0);
   const [selectedReasons, setSelectedReasons] = useState<string[]>([]);
   const [selectedBadHabits, setSelectedBadHabits] = useState<string[]>([]);
   const [selectedFrequency, setSelectedFrequency] = useState<string>('');
   const [selectedTherapy, setSelectedTherapy] = useState<string>('');
-  const [reminderTime, setReminderTime] = useState(new Date());
+  const [isCheckingOnboarding, setIsCheckingOnboarding] = useState(true);
+  const [tapCount, setTapCount] = useState(0);
+  const tapTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const router = useRouter();
   const { songs, setSongs, playSong } = useAudio();
 
@@ -98,7 +95,7 @@ export default function Onboarding() {
   const prayerAnim3 = useRef(new Animated.Value(0)).current;
 
   // Screens that should not have fade-in animations
-  const noAnimationScreens = [2, 5, 6];
+  const noAnimationScreens = [2, 4, 5];
 
   // Track if prayer animation has run
   const hasPrayerAnimated = useRef(false);
@@ -106,53 +103,29 @@ export default function Onboarding() {
   // Track if we've started playing
   const hasStartedPlaying = useRef(false);
 
-  // Listen for notifications while app is in foreground (for testing)
+  // Check if user has already completed onboarding
   useEffect(() => {
-    const subscription = NotificationService.addNotificationReceivedListener((notification: any) => {
-      console.log('📬 Notification received:', notification);
-      Alert.alert(
-        notification.request.content.title || 'Notification',
-        notification.request.content.body || '',
-        [{ text: 'OK' }]
-      );
-    });
+    const checkOnboardingStatus = async () => {
+      const completed = await hasCompletedOnboarding();
+      if (completed) {
+        router.replace('/(tabs)/verses');
+      } else {
+        setIsCheckingOnboarding(false);
+      }
+    };
 
-    return () => subscription.remove();
+    checkOnboardingStatus();
   }, []);
-
-  // Request notification permissions
-  const registerForPushNotificationsAsync = async () => {
-    return await NotificationService.registerForPushNotifications();
-  };
-
-  // TEST FUNCTION: Send immediate notification (for testing purposes)
-  const sendTestNotification = async () => {
-    await NotificationService.sendTestNotification();
-  };
-
-  // Schedule daily notification
-  const scheduleDailyNotification = async (time: Date) => {
-    await NotificationService.scheduleDailyNotification(time);
-  };
 
   // Load all songs on mount
   useEffect(() => {
     const loadMusic = async () => {
-      console.log('Onboarding: Starting to load music, current songs length:', songs.length);
-
       if (songs.length === 0) {
-        console.log('Onboarding: Fetching songs from Supabase...');
         const songList = await getBibleSongs();
-        console.log('Onboarding: Loaded songs:', songList);
 
         if (songList.length > 0) {
-          console.log('Onboarding: Setting songs in context');
           setSongs(songList);
-        } else {
-          console.error('Onboarding: No songs loaded from Supabase!');
         }
-      } else {
-        console.log('Onboarding: Songs already loaded, skipping');
       }
     };
 
@@ -162,7 +135,6 @@ export default function Onboarding() {
   // Start playing once songs are loaded
   useEffect(() => {
     if (songs.length > 0 && !hasStartedPlaying.current) {
-      console.log('Onboarding: Songs loaded in context, starting playback');
       hasStartedPlaying.current = true;
 
       // Find Cathedral 1 song, otherwise play first song
@@ -171,7 +143,6 @@ export default function Onboarding() {
       );
       const indexToPlay = cathedral1Index !== -1 ? cathedral1Index : 0;
 
-      console.log('Onboarding: Playing Cathedral 1 at index:', indexToPlay, songs[indexToPlay]);
       playSong(indexToPlay);
     }
   }, [songs]);
@@ -261,30 +232,71 @@ export default function Onboarding() {
     fadeAnim3.setValue(0);
 
     // Start sequential fade-in animations with stagger
-    // Use longer delay for screen 1 (prayer) button, shorter for screens 4, 7, 8
+    // Use longer delay for screen 1 (prayer) subtitle, shorter button delay
     let staggerDelay = 2500; // Default
-    if (currentScreen === 1) {
-      staggerDelay = 4000; // Prayer screen - longer delay
-    } else if ([4, 7, 8].includes(currentScreen)) {
-      staggerDelay = 1000; // Schedule notification, free trial, trial reminder - shorter delay
+    let initialDelay = 0; // Default no initial delay
+
+    if (currentScreen === 0) {
+      initialDelay = 800; // Welcome screen - slight delay before starting
+      staggerDelay = 1800; // Faster transition between welcome text lines
+    } else if (currentScreen === 1) {
+      staggerDelay = 3000; // Prayer screen - delay between title and subtitle
+    } else if (currentScreen === 6) {
+      staggerDelay = 1000; // Free trial - shorter delay
     }
-    animationRef.current = Animated.stagger(staggerDelay, [
-      Animated.timing(fadeAnim1, {
-        toValue: 1,
-        duration: 1200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(fadeAnim2, {
-        toValue: 1,
-        duration: 1200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(fadeAnim3, {
-        toValue: 1,
-        duration: 1200,
-        useNativeDriver: true,
-      }),
-    ]);
+
+    let animations;
+
+    // Special animation for prayer screen (screen 1) - faster button fade
+    if (currentScreen === 1) {
+      animations = Animated.sequence([
+        Animated.timing(fadeAnim1, {
+          toValue: 1,
+          duration: 1200,
+          useNativeDriver: true,
+        }),
+        Animated.delay(staggerDelay),
+        Animated.timing(fadeAnim2, {
+          toValue: 1,
+          duration: 1200,
+          useNativeDriver: true,
+        }),
+        Animated.delay(800), // Shorter delay before button
+        Animated.timing(fadeAnim3, {
+          toValue: 1,
+          duration: 1200,
+          useNativeDriver: true,
+        }),
+      ]);
+    } else {
+      animations = Animated.stagger(staggerDelay, [
+        Animated.timing(fadeAnim1, {
+          toValue: 1,
+          duration: 1200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(fadeAnim2, {
+          toValue: 1,
+          duration: 1200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(fadeAnim3, {
+          toValue: 1,
+          duration: 1200,
+          useNativeDriver: true,
+        }),
+      ]);
+    }
+
+    // Add initial delay if needed
+    if (initialDelay > 0) {
+      animationRef.current = Animated.sequence([
+        Animated.delay(initialDelay),
+        animations
+      ]);
+    } else {
+      animationRef.current = animations;
+    }
 
     animationRef.current.start();
 
@@ -320,11 +332,6 @@ export default function Onboarding() {
   };
 
   const handleContinue = async () => {
-    // If we're on the reminder screen (screen 4), schedule the notification
-    if (currentScreen === 4) {
-      await scheduleDailyNotification(reminderTime);
-    }
-
     if (currentScreen < SCREENS.length - 1) {
       setCurrentScreen(currentScreen + 1);
     } else {
@@ -333,21 +340,43 @@ export default function Onboarding() {
     }
   };
 
+  // Secret bypass for Apple testers - 5 taps to skip paywall
+  const handleSecretTap = async () => {
+    const newCount = tapCount + 1;
+    console.log(`🔔 Tap ${newCount}/5 on app icon`);
+    setTapCount(newCount);
+
+    // Clear existing timeout
+    if (tapTimeoutRef.current) {
+      clearTimeout(tapTimeoutRef.current);
+    }
+
+    if (newCount >= 5) {
+      console.log('🔓 Secret bypass activated - skipping to verses');
+      setTapCount(0);
+      await markOnboardingComplete();
+      router.push('/(tabs)/verses');
+    } else {
+      // Reset count after 3 seconds of no taps
+      tapTimeoutRef.current = setTimeout(() => {
+        console.log('⏱️ Tap count reset');
+        setTapCount(0);
+      }, 3000);
+    }
+  };
+
   const renderContent = () => {
     if (currentScreen === 0) {
       return (
         <View style={styles.welcomeContainer}>
-          <TouchableOpacity
-            style={styles.skipButton}
-            onPress={() => router.push('/plans')}
-          >
-            <Text style={styles.skipButtonText}>Skip</Text>
-          </TouchableOpacity>
-          <Animated.Text style={[styles.welcomeTitle, { opacity: fadeAnim1 }]}>
-            Welcome to{'\n'}Exploring Faith Together
+          <Animated.Text style={[styles.welcomeFirstWord, { opacity: fadeAnim1 }]}>
+            Welcome to
           </Animated.Text>
-          <Animated.Text style={[styles.welcomeSubtitle, { opacity: fadeAnim2 }]}>
-            First, let's take a moment for prayer
+          <Animated.Text style={[styles.welcomeSecondLine, { opacity: fadeAnim2 }]}>
+            Your Daily Time with God
+          </Animated.Text>
+          <Animated.Text style={[styles.welcomeSubtitle, { opacity: fadeAnim3 }]}>
+            A calm place to read, reflect, & pray
           </Animated.Text>
         </View>
       );
@@ -361,13 +390,10 @@ export default function Onboarding() {
           <View style={styles.prayerContainer}>
             <Text style={styles.prayerText}>
               <Animated.Text style={{ opacity: prayerAnim1 }}>
-                Thank you for meeting me right where I am.{' '}
+                Thank You for meeting me right where I am.{' '}
               </Animated.Text>
               <Animated.Text style={{ opacity: prayerAnim2 }}>
-                Teach me, guide me, and help me understand your word.{' '}
-              </Animated.Text>
-              <Animated.Text style={{ opacity: prayerAnim3 }}>
-                Help me learn with an open heart and patience.
+                Guide me, teach me, and open my heart as I learn Your Word.{' '}
               </Animated.Text>
             </Text>
           </View>
@@ -446,37 +472,6 @@ export default function Onboarding() {
     }
     if (currentScreen === 4) {
       return (
-        <Animated.View style={[styles.reminderContainer, { opacity: fadeAnim1 }]}>
-          <Text style={styles.reminderHeading}>When do you find yourself needing a boost of strength?</Text>
-
-          <View style={styles.timePickerWrapper}>
-            <DateTimePicker
-              value={reminderTime}
-              mode="time"
-              display="spinner"
-              onChange={(event, selectedDate) => {
-                if (selectedDate) {
-                  setReminderTime(selectedDate);
-                }
-              }}
-              textColor="#000000"
-              style={styles.timePicker}
-            />
-          </View>
-
-          {/* TEST BUTTON - Commented out for now
-          <TouchableOpacity
-            style={styles.testButton}
-            onPress={sendTestNotification}
-          >
-            <Text style={styles.testButtonText}>TEST NOTIFICATION (5 sec)</Text>
-          </TouchableOpacity>
-          */}
-        </Animated.View>
-      );
-    }
-    if (currentScreen === 5) {
-      return (
         <View style={{ flex: 1, width: '100%' }}>
           <ScrollView
             style={styles.choiceScreenContainer}
@@ -509,7 +504,7 @@ export default function Onboarding() {
         </View>
       );
     }
-    if (currentScreen === 6) {
+    if (currentScreen === 5) {
       return (
         <View style={{ flex: 1, width: '100%' }}>
           <ScrollView
@@ -517,7 +512,7 @@ export default function Onboarding() {
             contentContainerStyle={styles.choiceScrollContent}
             showsVerticalScrollIndicator={false}
           >
-            <Text style={styles.choiceHeading}>How often do you talk with someone about your faith and well being?</Text>
+            <Text style={styles.choiceHeading}>How often do you feel supported in your faith?</Text>
             <View style={styles.choiceList}>
               {THERAPY_OPTIONS.map((option) => (
                 <TouchableOpacity
@@ -543,19 +538,43 @@ export default function Onboarding() {
         </View>
       );
     }
-    if (currentScreen === 7) {
+    if (currentScreen === 6) {
       return (
         <Animated.View style={[styles.trialContainer, { opacity: fadeAnim1 }]}>
           <View style={styles.trialTitleContainer}>
-            <Text style={styles.trialTitle}>We want you to try our</Text>
-            <Text style={styles.trialTitleHighlight}>Holy Bible App</Text>
-            <Text style={styles.trialTitle}>for free</Text>
+            <TouchableOpacity
+              onPress={handleSecretTap}
+              activeOpacity={0.7}
+            >
+              <Image
+                source={require('../assets/images/icon.png')}
+                style={styles.trialAppIcon}
+              />
+            </TouchableOpacity>
+            <Text style={styles.trialTitle}>Grow Closer to God</Text>
+            <Text style={styles.trialTitleHighlight}>Start your 3-day free access</Text>
           </View>
         </Animated.View>
       );
     }
     return <Text style={styles.screenName}>{SCREENS[currentScreen]}</Text>;
   };
+
+  // Show loading screen while checking onboarding status
+  if (isCheckingOnboarding) {
+    return (
+      <ImageBackground
+        source={require('../assets/images/onboarding/main-bg.jpg')}
+        style={styles.container}
+        resizeMode="cover"
+      >
+        <View style={styles.overlay} />
+        <View style={[styles.content, { justifyContent: 'center', alignItems: 'center' }]}>
+          <ActivityIndicator size="large" color="#FFFFFF" />
+        </View>
+      </ImageBackground>
+    );
+  }
 
   return (
     <ImageBackground
@@ -570,7 +589,7 @@ export default function Onboarding() {
         <Animated.View style={{ opacity: fadeAnim3, width: '100%', alignItems: 'center', paddingHorizontal: 24 }}>
           <TouchableOpacity style={styles.button} onPress={handleContinue}>
             <Text style={styles.buttonText}>
-              {currentScreen === 0 ? "LET'S PRAY" : currentScreen === 1 ? 'AMEN' : currentScreen === 4 ? 'SCHEDULE A NOTIFICATION' : 'CONTINUE'}
+              {currentScreen === 0 ? "LET'S PRAY" : currentScreen === 1 ? 'AMEN' : currentScreen === 6 ? 'TRY FOR $0.00' : 'CONTINUE'}
             </Text>
           </TouchableOpacity>
         </Animated.View>
@@ -599,16 +618,25 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     width: '100%',
   },
-  skipButton: {
-    position: 'absolute',
-    top: 0,
-    left: 25,
-    padding: 8,
+  welcomeFirstWord: {
+    fontSize: 26,
+    fontWeight: '300',
+    color: '#1A1A1A',
+    textAlign: 'left',
+    letterSpacing: 0.5,
+    marginTop: 180,
+    marginLeft: 25,
+    marginRight: 25,
+    marginBottom: 4,
   },
-  skipButtonText: {
-    fontSize: 16,
-    color: '#5A5A5A',
-    fontWeight: '400',
+  welcomeSecondLine: {
+    fontSize: 26,
+    fontWeight: '300',
+    color: '#1A1A1A',
+    textAlign: 'left',
+    letterSpacing: 0.5,
+    marginLeft: 25,
+    marginRight: 25,
   },
   welcomeTitle: {
     fontSize: 26,
@@ -804,6 +832,10 @@ const styles = StyleSheet.create({
     letterSpacing: 4,
   },
   // Free trial offer screen styles
+  trialTouchable: {
+    flex: 1,
+    width: '100%',
+  },
   trialContainer: {
     width: '100%',
     paddingHorizontal: 24,
@@ -814,19 +846,27 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     alignItems: 'center',
   },
-  trialTitle: {
-    fontSize: 28,
-    fontWeight: '400',
-    color: '#5A5A5A',
-    textAlign: 'center',
-    letterSpacing: 0.5,
+  trialAppIcon: {
+    width: 100,
+    height: 100,
+    borderRadius: 22,
+    marginBottom: 24,
   },
-  trialTitleHighlight: {
-    fontSize: 28,
-    fontWeight: '600',
+  trialTitle: {
+    fontSize: 32,
+    fontWeight: '700',
     color: '#000000',
     textAlign: 'center',
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
+    marginBottom: 12,
+  },
+  trialTitleHighlight: {
+    fontSize: 20,
+    fontWeight: '500',
+    color: '#1A1A1A',
+    textAlign: 'center',
+    letterSpacing: 0.4,
+    marginBottom: 32,
   },
   trialSubtitle: {
     fontSize: 16,

@@ -60,28 +60,17 @@ export function AudioProvider({ children }: { children: ReactNode }) {
 
   // Auto-play when player is ready and we want to play
   useEffect(() => {
-    console.log('AudioContext: Auto-play effect triggered', {
-      hasPlayer: !!player,
-      isPlaying,
-      currentSongUrl,
-      currentSongIndex
-    });
-
     if (player && isPlaying && currentSongUrl && currentSongIndex !== null) {
-      console.log('AudioContext: Attempting to play song:', currentSongUrl);
       const timer = setTimeout(() => {
         try {
           player.play();
-          console.log('AudioContext: Successfully called player.play()');
           startBarAnimations();
         } catch (error) {
-          console.error('AudioContext: Error auto-playing song:', error);
+          // Silent error handling
         }
       }, 100);
 
       return () => clearTimeout(timer);
-    } else {
-      console.log('AudioContext: Not playing because conditions not met');
     }
   }, [player, currentSongUrl]);
 
@@ -93,7 +82,6 @@ export function AudioProvider({ children }: { children: ReactNode }) {
       // When song ends and repeat is off, play next song
       if (player.playing === false && player.duration > 0 && player.currentTime >= player.duration - 0.5) {
         if (!isRepeatOn && songs.length > 0 && currentSongIndex !== null) {
-          console.log('AudioContext: Song ended, playing next song');
           playNextSong();
         }
       }
@@ -142,18 +130,18 @@ export function AudioProvider({ children }: { children: ReactNode }) {
   };
 
   const playSong = (index: number) => {
-    console.log('AudioContext: playSong called', { index, songsLength: songs.length });
+    console.log('[playSong] Called with index:', index, 'Songs length:', songs.length);
     if (songs.length === 0) {
-      console.log('AudioContext: No songs available, returning');
+      console.log('[playSong] No songs available, returning');
       return;
     }
 
-    console.log('AudioContext: Playing song:', songs[index]);
+    console.log('[playSong] Playing:', songs[index]?.name);
     stopBarAnimations();
     setCurrentSongIndex(index);
     setCurrentSongUrl(songs[index].url);
     setIsPlaying(true);
-    console.log('AudioContext: Set state - url:', songs[index].url, 'isPlaying: true');
+    console.log('[playSong] State set - Index:', index, 'URL:', songs[index].url, 'IsPlaying: true');
     // The useEffect will handle playing when the player is ready
   };
 

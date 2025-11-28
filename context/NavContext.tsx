@@ -3,7 +3,7 @@ import { Animated, Image } from 'react-native';
 import { getBackgroundImages, BibleVerse } from '../lib/supabase';
 
 // Number of background images in Supabase bucket (named 1.jpg, 2.jpg, etc.)
-const BACKGROUND_IMAGE_COUNT = 33;
+const BACKGROUND_IMAGE_COUNT = 70;
 const BACKGROUND_IMAGES = getBackgroundImages(BACKGROUND_IMAGE_COUNT);
 
 interface NavContextType {

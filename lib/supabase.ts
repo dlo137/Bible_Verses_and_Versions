@@ -18,19 +18,19 @@ export interface BibleVerse {
 }
 
 export interface CuratedVerse {
-  id: number;
+  id: string;
   verse_id: number;
   category: string;
   subcategory?: string;
-  relevance_score: number;
+  sort_index: number;
   created_at: string;
   // Joined fields from bible_verses
   verse?: BibleVerse;
 }
 
-export type VerseCategory = 
+export type VerseCategory =
   | 'love'
-  | 'strength' 
+  | 'strength'
   | 'disappointment'
   | 'hope'
   | 'peace'
@@ -43,7 +43,13 @@ export type VerseCategory =
   | 'wisdom'
   | 'healing'
   | 'protection'
-  | 'purpose';
+  | 'purpose'
+  | 'struggle'
+  | 'addiction'
+  | 'family'
+  | 'work'
+  | 'desperation'
+  | 'anger';
 
 export const VERSE_CATEGORIES: { value: VerseCategory; label: string; description: string }[] = [
   { value: 'love', label: 'Love', description: 'God\'s love, self-love, loving others' },
@@ -60,7 +66,13 @@ export const VERSE_CATEGORIES: { value: VerseCategory; label: string; descriptio
   { value: 'wisdom', label: 'Wisdom', description: 'Seeking godly wisdom and understanding' },
   { value: 'healing', label: 'Healing', description: 'Physical, emotional, and spiritual healing' },
   { value: 'protection', label: 'Protection', description: 'God\'s protection and safety' },
-  { value: 'purpose', label: 'Purpose', description: 'Finding your calling and purpose' }
+  { value: 'purpose', label: 'Purpose', description: 'Finding your calling and purpose' },
+  { value: 'struggle', label: 'Struggle', description: 'Overcoming trials and hardships with faith' },
+  { value: 'addiction', label: 'Addiction', description: 'Breaking free from bondage and finding freedom' },
+  { value: 'family', label: 'Family', description: 'Building strong, godly family relationships' },
+  { value: 'work', label: 'Work', description: 'Honoring God through your work and diligence' },
+  { value: 'desperation', label: 'Desperation', description: 'Crying out to God in desperate times' },
+  { value: 'anger', label: 'Anger', description: 'Managing anger and finding peace' }
 ];
 
 // Update like count for a verse
@@ -73,7 +85,6 @@ export async function updateLikeCount(verseId: number, increment: boolean): Prom
     .single();
 
   if (fetchError) {
-    console.error('Error fetching like count:', fetchError);
     return null;
   }
 
@@ -87,7 +98,6 @@ export async function updateLikeCount(verseId: number, increment: boolean): Prom
     .eq('id', verseId);
 
   if (updateError) {
-    console.error('Error updating like count:', updateError);
     return null;
   }
 
@@ -110,16 +120,12 @@ export async function getBibleSongs(): Promise<{ name: string; url: string }[]> 
   });
 
   if (error) {
-    console.error('Error fetching songs from Supabase:', error);
     return [];
   }
 
   if (!data || data.length === 0) {
-    console.log('No files found in bible_songs bucket');
     return [];
   }
-
-  console.log('All files in bucket:', data.map(f => f.name));
 
   const songs = data
     .filter(file => file.name.endsWith('.mp3') || file.name.endsWith('.m4a') || file.name.endsWith('.wav'))
@@ -128,7 +134,6 @@ export async function getBibleSongs(): Promise<{ name: string; url: string }[]> 
       url: `${supabaseUrl}/storage/v1/object/public/bible_songs/${file.name}`,
     }));
 
-  console.log('Filtered songs:', songs);
   return songs;
 }
 
@@ -158,14 +163,13 @@ export async function getRandomVerse(): Promise<BibleVerse | null> {
     });
 
   if (error) {
-    console.error('Error fetching verse:', error);
     return null;
   }
 
   return data;
 }
 
-// Get curated verses by category
+// Get curated verses by category (ASV translation only)
 export async function getCuratedVersesByCategory(category: VerseCategory): Promise<BibleVerse[]> {
   const { data, error } = await supabase
     .from('curated_verses')
@@ -174,11 +178,11 @@ export async function getCuratedVersesByCategory(category: VerseCategory): Promi
       verse:bible_verses!inner(*)
     `)
     .eq('category', category)
-    .order('relevance_score', { ascending: false })
-    .limit(20); // Get top 20 most relevant verses
+    .eq('verse.translation_id', 1) // Filter for ASV translation
+    .order('sort_index', { ascending: true })
+    .limit(20); // Get top 20 verses in order
 
   if (error) {
-    console.error('Error fetching curated verses:', error);
     return [];
   }
 
@@ -189,9 +193,8 @@ export async function getCuratedVersesByCategory(category: VerseCategory): Promi
 // Get a random curated verse from a specific category
 export async function getRandomCuratedVerse(category: VerseCategory): Promise<BibleVerse | null> {
   const verses = await getCuratedVersesByCategory(category);
-  
+
   if (verses.length === 0) {
-    console.warn(`No curated verses found for category: ${category}`);
     // Fallback to random verse if no curated verses exist
     return getRandomVerse();
   }
@@ -208,11 +211,51 @@ export async function getAvailableCategories(): Promise<VerseCategory[]> {
     .order('category');
 
   if (error) {
-    console.error('Error fetching categories:', error);
     return [];
   }
 
   // Return unique categories
   const uniqueCategories = [...new Set(data.map(item => item.category))] as VerseCategory[];
   return uniqueCategories;
+}
+
+// Get verse of the day from curated verses (consistent per day, ASV translation only)
+export async function getVerseOfTheDay(): Promise<BibleVerse | null> {
+  try {
+    // Use today's date as a seed for consistent daily verse
+    const today = new Date();
+    const dateString = `${today.getFullYear()}-${today.getMonth()}-${today.getDate()}`;
+
+    // Get all curated verses with their verse data (ASV only)
+    const { data, error } = await supabase
+      .from('curated_verses')
+      .select(`
+        *,
+        verse:bible_verses!inner(*)
+      `)
+      .eq('verse.translation_id', 1) // Filter for ASV translation
+      .order('id', { ascending: true });
+
+    if (error) {
+      // Fallback to random verse if curated verses fail
+      return getRandomVerse();
+    }
+
+    if (!data || data.length === 0) {
+      return getRandomVerse();
+    }
+
+    // Generate a consistent index based on the date
+    let hash = 0;
+    for (let i = 0; i < dateString.length; i++) {
+      hash = ((hash << 5) - hash) + dateString.charCodeAt(i);
+      hash = hash & hash;
+    }
+    const index = Math.abs(hash) % data.length;
+
+    // Return the verse from the curated verses
+    return data[index].verse as BibleVerse;
+  } catch (err) {
+    return getRandomVerse();
+  }
 }

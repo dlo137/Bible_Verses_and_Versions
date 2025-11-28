@@ -1,9 +1,11 @@
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import BottomNav from '../../components/BottomNav';
 import { useFavorites } from '../../context/FavoritesContext';
 
 export default function Favorites() {
+  const router = useRouter();
   const { favorites, removeFavorite } = useFavorites();
 
   return (
@@ -30,11 +32,31 @@ export default function Favorites() {
           showsVerticalScrollIndicator={false}
         >
           {favorites.map((verse) => (
-            <View key={verse.id} style={styles.card}>
+            <TouchableOpacity
+              key={verse.id}
+              style={styles.card}
+              onPress={() => {
+                // Navigate to verses screen with this verse
+                router.push({
+                  pathname: '/(tabs)/verses',
+                  params: {
+                    verseId: verse.id.toString(),
+                    verseText: verse.text,
+                    bookName: verse.book_name,
+                    chapter: verse.chapter.toString(),
+                    verse: verse.verse.toString(),
+                  },
+                });
+              }}
+              activeOpacity={0.8}
+            >
               {/* Heart Icon */}
               <TouchableOpacity
                 style={styles.heartButton}
-                onPress={() => removeFavorite(verse.id)}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  removeFavorite(verse.id);
+                }}
                 activeOpacity={0.7}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
@@ -50,7 +72,7 @@ export default function Favorites() {
               <Text style={styles.verseReference}>
                 {verse.book_name} {verse.chapter}:{verse.verse}
               </Text>
-            </View>
+            </TouchableOpacity>
           ))}
           <View style={styles.bottomSpacer} />
         </ScrollView>

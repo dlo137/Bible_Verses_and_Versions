@@ -23,7 +23,12 @@
       "Bash(git commit:*)",
       "WebSearch",
       "WebFetch(domain:www.npmjs.com)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(supabase functions deploy:*)",
+      "Bash(where npx:*)",
+      "Bash(npx supabase functions deploy:*)",
+      "Bash(npx supabase functions:*)",
+      "Bash(npx supabase:*)"
     ],
     "deny": [],
     "ask": []

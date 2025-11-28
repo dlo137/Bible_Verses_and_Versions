@@ -3,47 +3,8 @@ import { useState, useCallback, useEffect } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import BottomNav from '../../components/BottomNav';
-import { supabase, BibleVerse } from '../../lib/supabase';
+import { supabase, BibleVerse, getVerseOfTheDay } from '../../lib/supabase';
 import { useFavorites } from '../../context/FavoritesContext';
-
-// Get a consistent random short verse for today based on date
-const getDailyVerse = async (): Promise<BibleVerse | null> => {
-  try {
-    // Use today's date as a seed for consistent daily verse
-    const today = new Date();
-    const dateString = `${today.getFullYear()}-${today.getMonth()}-${today.getDate()}`;
-
-    // Fetch short verses only (under 120 characters to fit in 2 lines)
-    const { data: shortVerses, error } = await supabase
-      .from('bible_verses')
-      .select('*')
-      .lt('text', 'z'.repeat(120)) // Approximate filter for short text
-      .order('id', { ascending: true });
-
-    if (error || !shortVerses) {
-      console.error('Error fetching verses:', error);
-      return null;
-    }
-
-    // Filter to only verses with text under 120 characters
-    const filteredVerses = shortVerses.filter(v => v.text.length <= 120);
-
-    if (filteredVerses.length === 0) return null;
-
-    // Generate a consistent index based on the date
-    let hash = 0;
-    for (let i = 0; i < dateString.length; i++) {
-      hash = ((hash << 5) - hash) + dateString.charCodeAt(i);
-      hash = hash & hash;
-    }
-    const index = Math.abs(hash) % filteredVerses.length;
-
-    return filteredVerses[index];
-  } catch (err) {
-    console.error('Error fetching daily verse:', err);
-    return null;
-  }
-};
 
 const CATEGORIES = [
   'Love', 'Anxiety',
@@ -80,7 +41,7 @@ export default function Search() {
 
   // Fetch verse of the day on mount
   useEffect(() => {
-    getDailyVerse().then(setDailyVerse);
+    getVerseOfTheDay().then(setDailyVerse);
   }, []);
 
   // Search function using ilike for keyword matching across multiple fields
