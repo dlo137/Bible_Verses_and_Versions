@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, ImageBackground, Image, Animated, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ImageBackground, Image, Animated, ScrollView, Alert, ActivityIndicator, TouchableWithoutFeedback } from 'react-native';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'expo-router';
 import { useAudio } from '../context/AudioContext';
@@ -103,6 +103,48 @@ export default function Onboarding() {
   // Track if we've started playing
   const hasStartedPlaying = useRef(false);
 
+  // Track animation timeouts for cleanup
+  const prayerAnimTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const confirmationAnimTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const prayerAnimRef = useRef<Animated.CompositeAnimation | null>(null);
+  const confirmationAnimRef = useRef<Animated.CompositeAnimation | null>(null);
+
+  // Skip animations on tap
+  const skipAnimations = () => {
+    // Stop all running animations
+    if (animationRef.current) {
+      animationRef.current.stop();
+    }
+    if (prayerAnimRef.current) {
+      prayerAnimRef.current.stop();
+    }
+    if (confirmationAnimRef.current) {
+      confirmationAnimRef.current.stop();
+    }
+
+    // Clear all timeouts
+    if (prayerAnimTimeoutRef.current) {
+      clearTimeout(prayerAnimTimeoutRef.current);
+      prayerAnimTimeoutRef.current = null;
+    }
+    if (confirmationAnimTimeoutRef.current) {
+      clearTimeout(confirmationAnimTimeoutRef.current);
+      confirmationAnimTimeoutRef.current = null;
+    }
+
+    // Set all animations to complete (1)
+    fadeAnim1.setValue(1);
+    fadeAnim2.setValue(1);
+    fadeAnim3.setValue(1);
+    prayerAnim1.setValue(1);
+    prayerAnim2.setValue(1);
+    prayerAnim3.setValue(1);
+    confirmationAnims.forEach(anim => anim.setValue(1));
+
+    // Mark current screen as animated
+    hasAnimatedScreen.current.add(currentScreen);
+  };
+
   // Check if user has already completed onboarding
   useEffect(() => {
     const checkOnboardingStatus = async () => {
@@ -158,8 +200,8 @@ export default function Onboarding() {
       prayerAnim3.setValue(0);
 
       // Start staggered animations for prayer lines after title fades in
-      setTimeout(() => {
-        Animated.stagger(2000, [
+      prayerAnimTimeoutRef.current = setTimeout(() => {
+        prayerAnimRef.current = Animated.stagger(2000, [
           Animated.timing(prayerAnim1, {
             toValue: 1,
             duration: 1200,
@@ -175,7 +217,8 @@ export default function Onboarding() {
             duration: 1200,
             useNativeDriver: false,
           }),
-        ]).start();
+        ]);
+        prayerAnimRef.current.start();
       }, 2800); // Wait for title to fade in first
     }
   }, [currentScreen, prayerAnim1, prayerAnim2, prayerAnim3]);
@@ -197,8 +240,9 @@ export default function Onboarding() {
       );
 
       // Delay confirmation items until after heading (fadeAnim1) finishes
-      setTimeout(() => {
-        Animated.stagger(1200, itemAnimations).start();
+      confirmationAnimTimeoutRef.current = setTimeout(() => {
+        confirmationAnimRef.current = Animated.stagger(1200, itemAnimations);
+        confirmationAnimRef.current.start();
       }, 2000); // Wait for heading to fade in first
     }
   }, [currentScreen, selectedReasons.length, confirmationAnims]);
@@ -551,8 +595,8 @@ export default function Onboarding() {
                 style={styles.trialAppIcon}
               />
             </TouchableOpacity>
-            <Text style={styles.trialTitle}>Grow Closer to God</Text>
-            <Text style={styles.trialTitleHighlight}>Start your 3-day free access</Text>
+            <Text style={styles.trialTitle}>Grow Closer to God </Text>
+            <Text style={styles.trialTitleHighlight}>Start your 3 day free trial</Text>
           </View>
         </Animated.View>
       );
@@ -583,17 +627,19 @@ export default function Onboarding() {
       resizeMode="cover"
     >
       <View style={styles.overlay} />
-      <View style={styles.content}>
-        {renderContent()}
+      <TouchableWithoutFeedback onPress={skipAnimations}>
+        <View style={styles.content}>
+          {renderContent()}
 
-        <Animated.View style={{ opacity: fadeAnim3, width: '100%', alignItems: 'center', paddingHorizontal: 24 }}>
-          <TouchableOpacity style={styles.button} onPress={handleContinue}>
-            <Text style={styles.buttonText}>
-              {currentScreen === 0 ? "LET'S PRAY" : currentScreen === 1 ? 'AMEN' : currentScreen === 6 ? 'TRY FOR $0.00' : 'CONTINUE'}
-            </Text>
-          </TouchableOpacity>
-        </Animated.View>
-      </View>
+          <Animated.View style={{ opacity: fadeAnim3, width: '100%', alignItems: 'center', paddingHorizontal: 24 }}>
+            <TouchableOpacity style={styles.button} onPress={handleContinue}>
+              <Text style={styles.buttonText}>
+                {currentScreen === 0 ? "LET'S PRAY" : currentScreen === 1 ? 'AMEN' : currentScreen === 6 ? 'TRY FOR $0.00' : 'CONTINUE'}
+              </Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
+      </TouchableWithoutFeedback>
     </ImageBackground>
   );
 }

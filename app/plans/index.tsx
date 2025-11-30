@@ -267,7 +267,7 @@ export default function Plans() {
 
           {/* Title */}
           <Text style={styles.appTitle}>Strengthen Your Faith Every Day</Text>
-          <Text style={styles.subtitle}>Clear, simple verses to guide you</Text>
+          <Text style={styles.subtitle}>Simple verses to guide you</Text>
 
           {/* Benefits List */}
           <View style={styles.benefitsList}>
@@ -282,7 +282,7 @@ export default function Plans() {
               <Text style={styles.benefitText}>Build a consistent scripture habit</Text>
             </View>
 
-  
+
             <View style={styles.benefitItem}>
               <Text style={styles.benefitIcon}>✓</Text>
               <Text style={styles.benefitText}>Simple, peaceful designs for focused reading</Text>
@@ -296,56 +296,44 @@ export default function Plans() {
 
         </View>
 
-        {/* Bottom Section */}
+        {/* Bottom Section - Pricing Card */}
         <View style={styles.bottomSection}>
-          {/* CTA Block */}
-          <Animated.View
+          {/* Monthly Plan */}
+          <TouchableOpacity
             style={[
-              styles.ctaBlock,
-              {
-                borderColor,
-                shadowColor: '#FFD700',
-                shadowOpacity,
-                shadowRadius,
-                shadowOffset: { width: 0, height: 0 },
-                elevation: 15,
-              }
+              styles.planCard,
+              styles.selectedPlan,
             ]}
+            activeOpacity={1}
           >
-            <TouchableOpacity
-              style={styles.ctaBlockInner}
-              onPress={handlePurchase}
-              disabled={!iapReady || loadingProducts || !!currentPurchaseAttempt || isPurchasing}
-            >
-              {(loadingProducts || currentPurchaseAttempt || isPurchasing) ? (
-                <ActivityIndicator size="large" color="#DAA520" />
-              ) : (
-                <>
-                  <Text style={styles.ctaMainText}>
-                    {!isIAPAvailable 
-                      ? 'Start FREE Trial (Demo)' 
-                      : !iapReady 
-                      ? 'Connecting...'
-                      : loadingProducts 
-                      ? 'Loading...'
-                      : currentPurchaseAttempt
-                      ? 'Processing...'
-                      : 'Start FREE Trial'
-                    }
-                  </Text>
-                  <Text style={styles.ctaTrialText}>3 day free trial • $9.99/month after</Text>
-                  <Text style={styles.ctaCancelText}>
-                    {!isIAPAvailable 
-                      ? 'Demo mode in Expo Go. Real purchases work in production.'
-                      : !isNotificationsAvailable
-                      ? 'Full features available in production builds.'
-                      : 'No commitment. Cancel anytime.'
-                    }
-                  </Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </Animated.View>
+            <View style={styles.planRadio}>
+              <View style={styles.planRadioSelected} />
+            </View>
+            <View style={styles.planContent}>
+              <Text style={styles.planName}>Monthly</Text>
+              <Text style={styles.planContentSubtext}>3 Day Free Trial</Text>
+            </View>
+            <View style={styles.planPricing}>
+              <Text style={styles.planPrice}>$9.99/month</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* Get Started Button - Below Cards */}
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity
+            style={[styles.getStartedButton, (!iapReady || loadingProducts || isPurchasing) && { opacity: 0.6 }]}
+            onPress={handlePurchase}
+            disabled={!iapReady || loadingProducts || isPurchasing}
+          >
+            {(loadingProducts || isPurchasing) ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Text style={styles.getStartedButtonText}>
+                {!iapReady ? 'CONNECTING...' : 'GET STARTED'}
+              </Text>
+            )}
+          </TouchableOpacity>
         </View>
 
         {/* Legal Links */}
@@ -371,19 +359,23 @@ export default function Plans() {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalBadge}>EXCLUSIVE OFFER</Text>
-              <Text style={styles.modalDiscount}>50% OFF</Text>
+              <View style={styles.modalDiscountBadge}>
+                <Text style={styles.modalDiscountBadgeText}>50% OFF</Text>
+              </View>
+              <Text style={styles.modalTrialBadge}>3-DAY FREE TRIAL</Text>
             </View>
 
-            <Text style={styles.modalTitle}>Wait! Don't Miss This</Text>
-            <Text style={styles.modalSubtitle}>Start with a 3 day free trial, then just</Text>
+            <Text style={styles.modalTitle}>Special Pricing</Text>
 
+            {/* Price - Most Prominent */}
             <View style={styles.modalPricing}>
               <Text style={styles.modalPriceOld}>$9.99</Text>
               <Text style={styles.modalPriceNew}>$4.99</Text>
               <Text style={styles.modalPriceSubtext}>/month</Text>
             </View>
 
-            <Text style={styles.modalFeatures}>3 day free trial • All features • Cancel anytime</Text>
+            {/* Auto-renew notice */}
+            <Text style={styles.modalAutoRenew}>Auto-renews after free trial. Cancel anytime.</Text>
 
             <TouchableOpacity
               style={styles.modalAcceptButton}
@@ -393,7 +385,7 @@ export default function Plans() {
               {(loadingProducts || currentPurchaseAttempt || isPurchasing) ? (
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
-                <Text style={styles.modalAcceptText}>Claim 50% Off</Text>
+                <Text style={styles.modalAcceptText}>TRY FREE & SUBSCRIBE</Text>
               )}
             </TouchableOpacity>
 
@@ -449,7 +441,7 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: 24,
-    paddingTop: 70,
+    paddingTop: 90,
     paddingBottom: 20,
     justifyContent: 'flex-start',
   },
@@ -457,11 +449,119 @@ const styles = StyleSheet.create({
     width: '100%',
     flex: 1,
     minHeight: 200,
+    paddingBottom: 60,
   },
   bottomSection: {
     width: '100%',
+    paddingHorizontal: 24,
+    gap: 16,
+    marginBottom: 16,
+    marginTop: 80,
+  },
+  planCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 20,
+    padding: 20,
+    flexDirection: 'row',
     alignItems: 'center',
+    position: 'relative',
+    overflow: 'visible',
+  },
+  freeTrialBadge: {
+    position: 'absolute',
+    top: -12,
+    left: -2,
+    backgroundColor: '#DAA520',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    shadowColor: '#DAA520',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  freeTrialBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 1,
+  },
+  selectedPlan: {
+    borderColor: '#DAA520',
+    backgroundColor: 'rgba(218, 165, 32, 0.1)',
+    shadowColor: '#DAA520',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 15,
+    elevation: 4,
+  },
+  planRadio: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#a0a8b8',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  planRadioSelected: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#DAA520',
+  },
+  planContent: {
+    flex: 1,
+  },
+  planName: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  planContentSubtext: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: '#ffffff',
+    marginTop: 0,
+  },
+  planPricing: {
+    alignItems: 'flex-end',
+  },
+  planPrice: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#a0a8b8',
+  },
+  planSubtext: {
+    fontSize: 12,
+    color: '#a0a8b8',
+    opacity: 0.7,
+    marginTop: 2,
+  },
+  buttonContainer: {
+    paddingHorizontal: 24,
     paddingBottom: 20,
+  },
+  getStartedButton: {
+    backgroundColor: '#DAA520',
+    paddingVertical: 18,
+    borderRadius: 30,
+    alignItems: 'center',
+    shadowColor: '#DAA520',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 15,
+    elevation: 10,
+  },
+  getStartedButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 2,
   },
   iconContainer: {
     alignItems: 'center',
@@ -612,7 +712,7 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
   },
   planPrice: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '400',
     color: '#FFFFFF',
     letterSpacing: 2,
@@ -622,39 +722,6 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.8)',
     letterSpacing: 2,
     marginTop: 2,
-  },
-  ctaBlock: {
-    borderRadius: 30,
-    borderWidth: 3,
-    width: '92%',
-    alignSelf: 'center',
-  },
-  ctaBlockInner: {
-    backgroundColor: 'transparent',
-    paddingHorizontal: 32,
-    paddingVertical: 24,
-    alignItems: 'center',
-  },
-  ctaMainText: {
-    color: '#DAA520',
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 4,
-    marginBottom: 10,
-  },
-  ctaTrialText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '500',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  ctaCancelText: {
-    color: '#FFFFFF',
-    opacity: 0.85,
-    fontSize: 11,
-    fontWeight: '400',
-    textAlign: 'center',
   },
   modalOverlay: {
     flex: 1,
@@ -676,61 +743,70 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   modalBadge: {
-    fontSize: 11,
-    fontWeight: '700',
+    fontSize: 10,
+    fontWeight: '600',
     color: '#DAA520',
     letterSpacing: 2,
+    marginBottom: 12,
+  },
+  modalDiscountBadge: {
+    backgroundColor: '#DAA520',
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    borderRadius: 20,
     marginBottom: 8,
   },
-  modalDiscount: {
-    fontSize: 48,
+  modalDiscountBadgeText: {
+    fontSize: 16,
     fontWeight: '800',
-    color: '#DAA520',
-    letterSpacing: -1,
+    color: '#FFFFFF',
+    letterSpacing: 2,
+  },
+  modalTrialBadge: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#888888',
+    letterSpacing: 1.5,
+    marginBottom: 4,
   },
   modalTitle: {
-    fontSize: 24,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '600',
     color: '#1A1A1A',
     textAlign: 'center',
-    marginBottom: 8,
-  },
-  modalSubtitle: {
-    fontSize: 16,
-    fontWeight: '400',
-    color: '#5A5A5A',
-    textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   modalPricing: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    justifyContent: 'center',
+    marginBottom: 16,
   },
   modalPriceOld: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '500',
     color: '#999999',
     textDecorationLine: 'line-through',
     marginRight: 12,
   },
   modalPriceNew: {
-    fontSize: 42,
+    fontSize: 48,
     fontWeight: '800',
     color: '#1A1A1A',
   },
   modalPriceSubtext: {
-    fontSize: 18,
-    fontWeight: '400',
+    fontSize: 20,
+    fontWeight: '600',
     color: '#5A5A5A',
     marginLeft: 4,
   },
-  modalFeatures: {
-    fontSize: 14,
-    fontWeight: '400',
+  modalAutoRenew: {
+    fontSize: 13,
+    fontWeight: '500',
     color: '#5A5A5A',
     textAlign: 'center',
     marginBottom: 24,
+    lineHeight: 18,
   },
   modalAcceptButton: {
     backgroundColor: '#DAA520',

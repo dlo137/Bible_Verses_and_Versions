@@ -31,11 +31,6 @@
       },
       "config": {
         "usesNonExemptEncryption": false
-      },
-      "entitlements": {
-        "com.apple.developer.in-app-payments": [
-          "merchant.com.watson.bibleverses"
-        ]
       }
     },
     "android": {
