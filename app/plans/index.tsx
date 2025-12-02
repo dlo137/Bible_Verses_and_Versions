@@ -178,41 +178,44 @@ export default function Plans() {
   };
 
   const handleClose = () => {
-    setShowDiscountModal(true);
+    // Comment out discount modal - redirect to initial onboarding instead
+    // setShowDiscountModal(true);
+    router.push('/');
   };
 
-  const handleDiscountAccept = async () => {
-    if (!iapReady || loadingProducts) {
-      console.log('🚫 IAP not ready yet');
-      return;
-    }
+  // COMMENTED OUT: Discount modal handlers
+  // const handleDiscountAccept = async () => {
+  //   if (!iapReady || loadingProducts) {
+  //     console.log('🚫 IAP not ready yet');
+  //     return;
+  //   }
 
-    console.log('🛒 Discount plan purchase clicked');
-    console.log('📦 Available products:', products);
-    console.log('🔗 Connected:', connected);
-    console.log('⚡ IAP Ready:', iapReady);
-    console.log('🔍 IAP Available:', isIAPAvailable);
+  //   console.log('🛒 Discount plan purchase clicked');
+  //   console.log('📦 Available products:', products);
+  //   console.log('🔗 Connected:', connected);
+  //   console.log('⚡ IAP Ready:', iapReady);
+  //   console.log('🔍 IAP Available:', isIAPAvailable);
 
-    setShowDiscountModal(false);
-    
-    // Set loading state BEFORE starting purchase
-    setCurrentPurchaseAttempt('discount');
+  //   setShowDiscountModal(false);
 
-    try {
-      // Purchase the discounted plan (discounted.monthly.plan - $4.99)
-      // This will trigger mock purchase in Expo Go automatically
-      await purchaseProduct('discounted.monthly.plan');
-      // Navigation will happen in success callback
-    } catch (error) {
-      console.error('❌ Discount purchase error:', error);
-      setCurrentPurchaseAttempt(null); // Clear loading state on error
-    }
-  };
+  //   // Set loading state BEFORE starting purchase
+  //   setCurrentPurchaseAttempt('discount');
 
-  const handleDiscountDecline = () => {
-    setShowDiscountModal(false);
-    router.back();
-  };
+  //   try {
+  //     // Purchase the discounted plan (discounted.monthly.plan - $4.99)
+  //     // This will trigger mock purchase in Expo Go automatically
+  //     await purchaseProduct('discounted.monthly.plan');
+  //     // Navigation will happen in success callback
+  //   } catch (error) {
+  //     console.error('❌ Discount purchase error:', error);
+  //     setCurrentPurchaseAttempt(null); // Clear loading state on error
+  //   }
+  // };
+
+  // const handleDiscountDecline = () => {
+  //   setShowDiscountModal(false);
+  //   router.back();
+  // };
 
   const handleRestorePurchase = async () => {
     console.log('🔄 Restore purchase clicked');
@@ -348,8 +351,8 @@ export default function Plans() {
         </View>
       </View>
 
-      {/* Discount Modal */}
-      <Modal
+      {/* COMMENTED OUT: Discount Modal */}
+      {/* <Modal
         visible={showDiscountModal}
         transparent={true}
         animationType="fade"
@@ -367,14 +370,12 @@ export default function Plans() {
 
             <Text style={styles.modalTitle}>Special Pricing</Text>
 
-            {/* Price - Most Prominent */}
             <View style={styles.modalPricing}>
               <Text style={styles.modalPriceOld}>$9.99</Text>
               <Text style={styles.modalPriceNew}>$4.99</Text>
               <Text style={styles.modalPriceSubtext}>/month</Text>
             </View>
 
-            {/* Auto-renew notice */}
             <Text style={styles.modalAutoRenew}>Auto-renews after free trial. Cancel anytime.</Text>
 
             <TouchableOpacity
@@ -393,7 +394,6 @@ export default function Plans() {
               <Text style={styles.modalDeclineText}>No thanks, I'll pass</Text>
             </TouchableOpacity>
 
-            {/* Legal Links */}
             <View style={styles.legalContainer}>
               <TouchableOpacity onPress={openTermsOfUse} style={styles.legalButton}>
                 <Text style={styles.legalText}>Terms of Use</Text>
@@ -405,7 +405,7 @@ export default function Plans() {
             </View>
           </View>
         </View>
-      </Modal>
+      </Modal> */}
     </ImageBackground>
   );
 }
