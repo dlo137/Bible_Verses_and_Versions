@@ -3,7 +3,7 @@ module.exports = ({ config }) => {
   const baseConfig = {
     name: 'bible',
     slug: 'bible',
-    version: '1.0.2',
+    version: '1.0.3',
     orientation: 'portrait',
     icon: './assets/images/icon.png',
     splash: {
