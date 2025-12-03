@@ -6,8 +6,8 @@ import { useNav } from '../../context/NavContext';
 import { useAudio } from '../../context/AudioContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import RatingModal from '../../components/RatingModal';
-import { incrementVerseViewCount, shouldShowRatingPrompt, markRatingPromptShown, markUserRated } from '../../utils/ratingPrompt';
+import * as StoreReview from 'expo-store-review';
+import { incrementVerseViewCount, shouldShowRatingPrompt, markRatingPromptShown } from '../../utils/ratingPrompt';
 
 export default function Verses() {
   const router = useRouter();
@@ -17,7 +17,6 @@ export default function Verses() {
 
   const [currentVerse, setCurrentVerse] = useState<BibleVerse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [showRatingModal, setShowRatingModal] = useState(false);
   const recentBgIndices = useRef<number[]>([]);
   const currentBgIndexRef = useRef(0);
 
@@ -267,9 +266,13 @@ export default function Verses() {
 
     const shouldShow = await shouldShowRatingPrompt();
     if (shouldShow) {
-      // Delay showing the modal slightly so animations complete first
-      setTimeout(() => {
-        setShowRatingModal(true);
+      // Delay showing the native review prompt slightly so animations complete first
+      setTimeout(async () => {
+        // Check if the StoreReview API is available on this platform
+        if (await StoreReview.isAvailableAsync()) {
+          await StoreReview.requestReview();
+          await markRatingPromptShown();
+        }
       }, 1500);
     }
 
@@ -346,26 +349,8 @@ export default function Verses() {
     })
   ).current;
 
-  // Handle rating modal actions
-  const handleRate = async () => {
-    await markUserRated();
-    await markRatingPromptShown();
-    setShowRatingModal(false);
-  };
-
-  const handleDismissRating = async () => {
-    await markRatingPromptShown();
-    setShowRatingModal(false);
-  };
-
   return (
     <View style={styles.container} {...panResponder.panHandlers}>
-      {/* Rating Modal */}
-      <RatingModal
-        visible={showRatingModal}
-        onRate={handleRate}
-        onDismiss={handleDismissRating}
-      />
 
       {/* Audio Player - Top Right */}
       {songs.length > 0 && currentSongIndex !== null && (

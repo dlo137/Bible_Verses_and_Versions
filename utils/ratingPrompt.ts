@@ -99,6 +99,8 @@ export async function markRatingPromptShown(): Promise<void> {
 
 /**
  * Mark that user has rated the app (won't show prompt again)
+ * Note: With native StoreReview, this is managed automatically by the OS
+ * These functions are kept for backwards compatibility but may not be needed
  */
 export async function markUserRated(): Promise<void> {
   try {
@@ -111,6 +113,7 @@ export async function markUserRated(): Promise<void> {
 
 /**
  * Check if user has already rated the app
+ * Note: With native StoreReview, this is managed automatically by the OS
  */
 export async function hasUserRated(): Promise<boolean> {
   try {

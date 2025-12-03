@@ -29,7 +29,8 @@
       "Bash(npx supabase functions deploy:*)",
       "Bash(npx supabase functions:*)",
       "Bash(npx supabase:*)",
-      "Bash(where:*)"
+      "Bash(where:*)",
+      "Bash(del \"components\\RatingModal.tsx\")"
     ],
     "deny": [],
     "ask": []
