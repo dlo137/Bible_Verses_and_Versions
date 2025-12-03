@@ -1,5 +1,3 @@
-const withAlternateIcons = require('./plugins/withAlternateIcons');
-
 module.exports = ({ config }) => {
   // Base configuration from app.json
   const baseConfig = {
@@ -76,11 +74,6 @@ module.exports = ({ config }) => {
         },
       ],
       'expo-asset',
-      // Add alternate icons plugin for App Store Product Page Optimization
-      [
-        withAlternateIcons,
-        ['AppIconAlt1', 'AppIconAlt2', 'AppIconAlt3'], // Alternate icon names
-      ],
     ],
     experiments: {
       typedRoutes: true,
